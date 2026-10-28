@@ -28,6 +28,8 @@ jobs:
           sha256sum data/* > results/latent_grammar_lattice/source_sha256.txt
       - name: Train latent models and evaluate exact probability lattices
         run: python experiments/latent_grammar/fixed_target.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --out results/latent_grammar_lattice --states 6 --em-iterations 5 --max-targets 130
+      - name: Evaluate exact whole-word lattice with inner-tuned smoothing
+        run: python experiments/latent_grammar/word_lattice.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --out results/latent_grammar_lattice/word_lattice --max-vocab 700 --max-targets 300
       - uses: actions/upload-artifact@v4
         if: always()
         with:
