@@ -83,13 +83,17 @@ def english_features(train: list[str], future: list[str], min_degree=2,
     transitions = Counter()
     contexts = Counter()
     for word, count in freq.items():
-        seq = ('^',) + units(word) + ('
+        seq = ('^',) + units(word) + ('$',)
+        for a, b in zip(seq, seq[1:]):
             transitions[a, b] += count
             contexts[a] += count
     vocab_size = len(alphabet) + 1
 
     def letter_bigram(word):
-        seq = ('^',) + units(word) + ('
+        seq = ('^',) + units(word) + ('$',)
+        return sum(math.log((transitions[a, b] + .5) /
+                            (contexts[a] + .5 * vocab_size))
+                   for a, b in zip(seq, seq[1:])) / (len(seq) - 1)
 
     rows = []
     for word, deg in degree.items():
