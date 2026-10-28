@@ -39,23 +39,9 @@ jobs:
       - name: Audit candidates against an independent English pronunciation lexicon
         shell: bash
         run: |
-          python - <<'PY'
-          import cmudict
-          from pathlib import Path
-          words = sorted({w.lower() for w in cmudict.words()
-                          if w.isascii() and w.isalpha()})
-          Path('data/cmudict_words.txt').write_text('\\n'.join(words) + '\\n')
-          print('CMUdict version', cmudict.__version__, 'words', len(words))
-          PY
+          python -c 'import cmudict; from pathlib import Path; words=sorted({w.lower() for w in cmudict.words() if w.isascii() and w.isalpha()}); Path("data/cmudict_words.txt").write_text(chr(10).join(words)+chr(10)); print("CMUdict",cmudict.__version__,len(words))'
           sha256sum data/cmudict_words.txt | tee results/lexicon_sha256.txt
-          python experiments/english_controls/lexicon_audit.py \\
-            --lexicon data/cmudict_words.txt \\
-            --candidates results/english_controls/austen_11063_candidates.csv \\
-                         results/english_controls/austen_22843_candidates.csv \\
-                         results/english_controls/darwin_11063_candidates.csv \\
-                         results/english_controls/darwin_22843_candidates.csv \\
-            --min-length 3 --top 100 \\
-            --out results/english_controls/lexicon_audit.json
+          python experiments/english_controls/lexicon_audit.py --lexicon data/cmudict_words.txt --candidates results/english_controls/austen_11063_candidates.csv results/english_controls/austen_22843_candidates.csv results/english_controls/darwin_11063_candidates.csv results/english_controls/darwin_22843_candidates.csv --min-length 3 --top 100 --out results/english_controls/lexicon_audit.json
       - name: Run sentence and line transition cloze controls
         run: |
           python experiments/context/slot_filling.py \
