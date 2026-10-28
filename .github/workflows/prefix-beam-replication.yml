@@ -1,0 +1,33 @@
+name: Prefix beam experiment
+on:
+  push:
+    branches: [prefix-beam-lattice]
+    paths:
+      - .github/workflows/prefix-beam-replication.yml
+      - experiments/prefix_lattices/**
+  workflow_dispatch:
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Fetch source corpora
+        run: |
+          mkdir -p data results/prefix_lattices
+          curl -fsSL -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL -o data/1228.txt https://raw.githubusercontent.com/GITenberg/On-the-Origin-of-Species-By-Means-of-Natural-Selection--13-Or-the-Preservation-of-Favoured-Rac__1228/master/1228.txt
+          sha256sum data/* > results/prefix_lattices/source_sha256.txt
+      - name: Evaluate prefix and beam models
+        run: python experiments/prefix_lattices/prefix_beam.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --out results/prefix_lattices --max-events 160 --max-novel 128
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prefix-lattice-outputs
+          path: results/prefix_lattices
+          retention-days: 30
