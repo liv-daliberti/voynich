@@ -90,6 +90,36 @@ For 172 Currier A and 334 Currier B distinct new-form contexts (first eligible o
 
 The neighbor-context score performs close to its shuffled control, and combining it with spelling lowers prediction performance relative to spelling alone. On *English unseen-form tests*, context transfer also fails to give a consistent improvement and only 24–54 eligible cases are available per sample. This is a **negative result for this specific neighbor-based estimator**, not a demonstration that Voynich has no syntax. The later added **seen-word positive control** separately checks whether ordinary English word-order information is detectable by the pipeline.
 
+### Seen-word control: the pipeline *does* detect ordinary English word order
+
+A follow-up [successful source-data run](https://github.com/liv-daliberti/voynich/actions/runs/40781757349) added a distinct task on already-attested training words, using 9 distractors matched on **word length and coarse frequency**. Here the direct `previous -> target -> following` transition model is tested, not neighbor-context transfer.
+
+| Corpus | Eligible test positions | Observed-order pairwise accuracy | Within-folio/block+position shuffled control |
+|---|---:|---:|---:|
+| Voynich A | 741 | 0.614 | 0.595 |
+| Voynich B | 1,000 | 0.645 | 0.606 |
+| Austen, 11k | 818 | 0.697 | 0.540 |
+| Austen, 23k | 1,000 | 0.719 | 0.514 |
+| Darwin, 11k | 893 | 0.698 | 0.562 |
+| Darwin, 23k | 1,000 | 0.743 | 0.549 |
+
+The **English positive control succeeds**: actual word-order contexts outperform corresponding position-preserving shuffles strongly on already-seen words. The same test shows a much smaller difference for Voynich, not zero; page/section and repeated-token dependencies prevent naive significance inference.
+
+**Crucial interpretation:** Context is predictable in readable English in this pipeline, but *transferring context from one-letter neighbors to unseen types* does not consistently work, even in English. That is evidence against this specific transfer mechanism, not against word-order structure itself.
+
+### Independent lexical reference
+
+The full run also audited candidate stability against CMUdict 1.1.3 (117,493 ASCII alphabetic forms), restricting comparisons to candidate strings of at least three letters:
+
+| Corpus | Dictionary membership among all candidates | Membership among top 100 by mask stability |
+|---|---:|---:|
+| Austen 11k | 16.7% | 64% |
+| Austen 23k | 14.0% | 67% |
+| Darwin 11k | 16.1% | 67% |
+| Darwin 23k | 13.6% | 66% |
+
+These are *lexicon membership* rates, not precision at “real English” as judged by a linguist. Pronunciation dictionaries contain proper nouns and abbreviations and omit some legitimate words. High edit-graph stability preferentially selects many familiar spellings, including English words not attested in the selected book passage. Compare `bet` in Austen (top-500 nomination 73.2% in the 23k-token experiment, not later attested in that passage, but present in CMUdict).
+
 ### Required next experiments before publication
 
 1. Re-run Python on original source and freeze SHA hashes; test results on independent book editions/transcriptions.
