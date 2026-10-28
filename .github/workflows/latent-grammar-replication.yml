@@ -1,0 +1,40 @@
+name: Fixed-target grammar lattice replication
+on:
+  push:
+    branches: [latent-grammar-lattice]
+    paths:
+      - .github/workflows/latent-grammar-replication.yml
+      - experiments/latent_grammar/**
+      - tests/test_fixed_target_lattice.py
+  workflow_dispatch:
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Fetch manuscript English and published self-citation sample
+        run: |
+          set -euo pipefail
+          mkdir -p data results/latent_grammar_lattice
+          curl -fsSL -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL -o data/1228.txt https://raw.githubusercontent.com/GITenberg/On-the-Origin-of-Species-By-Means-of-Natural-Selection--13-Or-the-Preservation-of-Favoured-Rac__1228/master/1228.txt
+          curl -fsSL -o data/timm_generated.txt https://raw.githubusercontent.com/TorstenTimm/SelfCitationTextgenerator/master/executable/generate/generated_text.txt
+          sha256sum data/* > results/latent_grammar_lattice/source_sha256.txt
+      - name: Train latent models and evaluate exact probability lattices
+        run: python experiments/latent_grammar/fixed_target.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --out results/latent_grammar_lattice --states 6 --em-iterations 5 --max-targets 130
+      - name: Evaluate exact whole-word lattice with inner-tuned smoothing
+        run: python experiments/latent_grammar/word_lattice.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --out results/latent_grammar_lattice/word_lattice --max-vocab 700 --max-targets 300
+      - name: Structural analogy matching and known-renaming English control
+        run: python experiments/latent_grammar/structural_alignment.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --out results/latent_grammar_lattice/structural_alignment --k 70
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: latent-grammar-results
+          path: results/latent_grammar_lattice
+          retention-days: 30
