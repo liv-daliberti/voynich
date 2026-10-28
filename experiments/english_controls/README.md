@@ -31,18 +31,28 @@ Each corpus uses the first 11,063 or 22,843 tokens to approximately match earlie
 
 Outputs: candidate CSVs with per-word support, 500-mask stability and logistic predictions; per-mask compositions (deleted training, later-attested, unattested); summary.json with candidate recall, ROC-AUC, average precision, matched degree+length concordance. Optional `--lexicon /path/to/words.txt` checks membership in a separately provided English lexicon; this is a deliberately imperfect reference (proper nouns, archaic forms, inflections, OCR artifacts).
 
-### Initial exploratory screens (before the full Python rerun)
+### Completed 500-mask Python replication
 
-The following numbers were computed in a separate JS analysis of the original texts, using the same 70/30 prefix and character one-edit candidates. They represent **single-split screens**, not 500-mask output or verified results from this Python implementation.
+Reproduced in [GitHub Actions run 40781058172](https://github.com/liv-daliberti/voynich/actions/runs/40781058172), with raw source hashes and detailed candidate-level CSVs in its uploaded artifact.
 
-| Corpus | Tokens | New candidates (degree>=2) | Held-out hits | Raw degree AUC | Raw letter-bigram AUC | Within-degree-and-length letter-bigram concordance |
+**Correction:** a prior exploratory JavaScript screen counted certain duplicate edit constructions from the same source type as independent neighbors. The committed Python implementation correctly deduplicates proposals per source word. Its numbers supersede the preliminary English table. The earlier Voynich-only proposal generator already used set deduplication.
+
+| Corpus | Sample tokens | Novel candidates (degree >= 2) | Later-attested candidates | Degree+length AUC | +bigram AUC | 500-mask mean later-attested top-500 |
 |---|---:|---:|---:|---:|---:|---:|
-| Austen | 11,063 | 22,725 | 42 | 0.703 | 0.765 | 0.756 |
-| Austen | 22,843 | 38,280 | 61 | 0.714 | 0.784 | 0.748 |
-| Darwin | 11,063 | 24,166 | 34 | 0.758 | 0.764 | 0.796 |
-| Darwin | 22,843 | 39,096 | 62 | 0.701 | 0.739 | 0.811 |
+| Austen | 11,063 | 13,590 | 42 | .704 | .810 | 3.436 |
+| Austen | 22,843 | 23,410 | 59 | .690 | .810 | 3.816 |
+| Darwin | 11,063 | 13,635 | 34 | .756 | .830 | 4.036 |
+| Darwin | 22,843 | 22,956 | 62 | .630 | .796 | 4.050 |
+| Naibbe (EVA) | 11,063 | 93,071 | 546 | .858 | .939 | 41.540 |
+| Naibbe (EVA) | 22,843 | 155,148 | 697 | .920 | .959 | 33.876 |
 
-Comparison: Voynich A (same earlier source-data screen) raw degree AUC 0.790, glyph-bigram AUC 0.831, matched concordance 0.879; B 0.785, 0.798, 0.885. Candidate base rates are different and sample definitions are not perfectly aligned: **these aren't calibrated cross-corpus effect sizes.**
+*ROC-AUC is prospective attestation prediction, not probability of linguistic validity.* Naibbe is ciphertext, yet exhibits stronger performance in this setup than English, illustrating why these statistics do **not** establish natural-language syntax. Base rates, candidate pools, source lengths, and encoding differ greatly.
+
+The full-source data hashes in the archived artifact are:
+- Austen SHA256 `48e0522844402a86a3ea98f0947ba85ea54838db3c59022299298ed968a5a163`
+- Darwin SHA256 `82ee88e28d5f4662d03d2bfd09330d79cf860c090930d1774e23aa1609bf3730`
+- Naibbe SHA256 `9cdf2de12f371ac7efdb2e78713f229ada508286c1717758184238a59cd64326`
+- ZL3b SHA256 `bf5b6d4ac1e3a51b1847a9c388318d609020441ccd56984c901c32b09beccafc`
 
 ## Experiment 2: line/sentence transition graph and unseen-form slot filling
 
@@ -64,6 +74,21 @@ Build a *directed, weighted* graph from each adjacent pair `previous -> next` in
 - Spelling + actual context vs spelling + shuffled context.
 
 The test takes the **first eligible occurrence of each genuinely new held-out candidate**, with previous and next tokens present in training. Rank the correct word against 9 randomly sampled forms with **exactly the same edit-graph degree and glyph/character length**. Report pairwise accuracy and top-1 rate; chance top-1 is 10%. Some unknown types are untestable and must be reported as selection limitations. Results are token-location-dependent conditional rankings, **not grammar or semantic decoding**.
+
+### Completed unseen-form slot-filling result
+
+For 172 Currier A and 334 Currier B distinct new-form contexts (first eligible occurrence per form), 9 distractors were matched on exact length and edit degree. On *pairwise accuracy*:
+
+| Model | Voynich A | Voynich B |
+|---|---:|---:|
+| Spelling bigrams alone | .802 | .834 |
+| Neighbor context: left only | .546 | .546 |
+| Neighbor context: left + right + position | .612 | .552 |
+| Neighbor context with position-preserving shuffles | .603 | .534 |
+| Spelling + actual neighbor context | .773 | .743 |
+| Spelling + shuffled neighbor context | .774 | .729 |
+
+The neighbor-context score performs close to its shuffled control, and combining it with spelling lowers prediction performance relative to spelling alone. On *English unseen-form tests*, context transfer also fails to give a consistent improvement and only 24–54 eligible cases are available per sample. This is a **negative result for this specific neighbor-based estimator**, not a demonstration that Voynich has no syntax. The later added **seen-word positive control** separately checks whether ordinary English word-order information is detectable by the pipeline.
 
 ### Required next experiments before publication
 
