@@ -1,0 +1,50 @@
+name: Reproduce English and context controls
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experiments/phonotactic-attestation
+    paths:
+      - .github/workflows/corpus-replication.yml
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install analysis dependencies
+        run: pip install -r requirements.txt
+      - name: Fetch original source corpora
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data results
+          curl -fsSL --retry 3 -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL --retry 3 -o data/1228.txt https://raw.githubusercontent.com/GITenberg/On-the-Origin-of-Species-By-Means-of-Natural-Selection--13-Or-the-Preservation-of-Favoured-Rac__1228/master/1228.txt
+          curl -fsSL --retry 3 -o data/nathist_output_ciphertext.txt https://raw.githubusercontent.com/greshko/naibbe-cipher/main/encrypted/nathist_output_ciphertext.txt
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          sha256sum data/* | tee results/source_sha256.txt
+      - name: Run English and Naibbe controls with 500 masks
+        run: |
+          python experiments/english_controls/benchmark.py \
+            --austen data/1342-0.txt --darwin data/1228.txt \
+            --naibbe data/nathist_output_ciphertext.txt \
+            --tokens 11063 22843 --trials 500 \
+            --out results/english_controls
+      - name: Run sentence and line transition cloze controls
+        run: |
+          python experiments/context/slot_filling.py \
+            --zl data/ZL3b-n.txt --austen data/1342-0.txt \
+            --darwin data/1228.txt --out results/context
+      - name: Archive source hashes and all outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voynich-controls-results
+          path: results/
+          retention-days: 30
+          if-no-files-found: warn
