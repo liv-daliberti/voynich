@@ -270,6 +270,81 @@ def evaluate_cloze(sequences, eva, seed=20261028, negatives=9):
                         for key in cols}}, tasks, stats[1]
 
 
+
+def evaluate_seen_control(sequences, eva, seed=20261028,
+                          max_tasks=1000, negatives=9):
+    """Sanity test: can local word order rank ALREADY OBSERVED word types?
+
+    Distractors have identical unit length and similar token frequency.
+    English should provide a detectable context-vs-shuffle signal. This is
+    deliberately a distinct task from unseen-form neighbor transfer.
+    """
+    train, test = split_sequences(sequences)
+    real = graph_stats(train)
+    null = graph_stats(shuffle_within_group_position(train, seed))
+    freq, _, _, _ = real
+    V = len(freq)
+    buckets = defaultdict(list)
+    for word, count in freq.items():
+        length = len(glyphs(word)) if eva else len(word)
+        bucket = (length, int(math.log2(count + 1)))
+        buckets[bucket].append(word)
+    events = []
+    for _, sentence in test:
+        for i in range(1, len(sentence) - 1):
+            before, word, after = sentence[i - 1:i + 2]
+            if before not in freq or after not in freq or word not in freq:
+                continue
+            bucket = (len(glyphs(word)) if eva else len(word),
+                      int(math.log2(freq[word] + 1)))
+            if len(buckets[bucket]) < negatives + 1:
+                continue
+            events.append((before, word, after, position(i, len(sentence)),
+                           bucket))
+    rng = random.Random(seed)
+    rng.shuffle(events)
+    tasks = events[:max_tasks]
+    wins = Counter()
+    top1 = Counter()
+    columns = ('frequency', 'observed_context', 'shuffled_context')
+
+    def context_score(before, word, after, pos, stats):
+        freq, edges, positions, _ = stats
+        alpha = .5
+        left = math.log((edges[before, word] + alpha) /
+                        (freq[before] + alpha * V))
+        right = math.log((edges[word, after] + alpha) /
+                         (freq[word] + alpha * V))
+        slot = math.log((positions[pos, word] + alpha) /
+                        (freq[word] + 3 * alpha))
+        return left + right + slot
+
+    for before, correct, after, pos, bucket in tasks:
+        negatives_set = rng.sample([w for w in buckets[bucket]
+                                    if w != correct], negatives)
+        alternatives = [correct] + negatives_set
+        predictions = {
+            'frequency': [math.log1p(freq[w]) for w in alternatives],
+            'observed_context': [context_score(before, w, after, pos, real)
+                                 for w in alternatives],
+            'shuffled_context': [context_score(before, w, after, pos, null)
+                                 for w in alternatives],
+        }
+        for col in columns:
+            arr = predictions[col]
+            wins[col] += sum(int(arr[0] > score) +
+                             .5 * int(arr[0] == score)
+                             for score in arr[1:]) / negatives
+            top1[col] += int(arr[0] == max(arr)) / arr.count(max(arr))
+    return {
+        'task_count': len(tasks), 'negatives_per_task': negatives,
+        'metrics': {key: {
+            'pairwise_accuracy': round(wins[key] / len(tasks), 6)
+                                 if tasks else None,
+            'top1': round(top1[key] / len(tasks), 6)
+                    if tasks else None} for key in columns}
+    }
+
 def run(zl, austen, darwin, out, token_budgets=(11063, 22843)):
     raw_zl = Path(zl).read_text(encoding='utf-8-sig')
     out = Path(out)
@@ -284,6 +359,7 @@ def run(zl, austen, darwin, out, token_budgets=(11063, 22843)):
                             prefix_budget(sentences, budget), False))
     for label, seq, eva in corpora:
         summary, tasks, edges = evaluate_cloze(seq, eva)
+        summary['seen_word_control'] = evaluate_seen_control(seq, eva)
         result[label] = summary
         with (out / f'{label}_cloze_tasks.csv').open('w', newline='') as fp:
             writer = csv.writer(fp)
