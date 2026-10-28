@@ -136,51 +136,62 @@ def evaluate_sample(tokens: list[str], lexicon: set[str] | None = None,
                 row[label] = float(score)
             results[label] = metrics(y, pred)
 
-    # Reconstruct the 500 exact random 75%-deletion masks on the same outer
-    # prefix. A single source type contributes a single witness, regardless
-    # of its token frequency.
+    # Rank all mask-absent types, including deleted training words.
     rng = np.random.default_rng(seed)
-    ptr = np.zeros(len(outer) + 1, dtype=np.int64)
-    ids = {w: i for i, w in enumerate(forms)}
+    training_counts = Counter(tokens[:cut])
+    form_ids = {w: i for i, w in enumerate(forms)}
+    future_new = set(tokens[cut:]) - training_counts.keys()
+    mask_vocab = sorted(w for w, witnesses in neighbors.items()
+                        if len(witnesses) >= min_degree)
+    ptr = np.zeros(len(mask_vocab) + 1, dtype=np.int64)
     flat_parts = []
-    for i, row in enumerate(outer):
-        witness = neighbors[row['word']]
-        ptr[i + 1] = ptr[i] + len(witness)
-        flat_parts.extend(witness)
+    for i, word in enumerate(mask_vocab):
+        ptr[i + 1] = ptr[i] + len(neighbors[word])
+        flat_parts.extend(neighbors[word])
     flat = np.asarray(flat_parts, dtype=np.int32)
-    top_hits = np.zeros(len(outer), dtype=np.int32)
-    visible_neighbor_sum = np.zeros(len(outer), dtype=np.float64)
-    visible_counts = np.zeros(len(outer), dtype=np.int32)
+    self_ids = np.array([form_ids.get(w, -1) for w in mask_vocab], dtype=np.int32)
+    kinds = np.array([0 if w in training_counts else 1 if w in future_new else 2
+                      for w in mask_vocab], dtype=np.int8)
+    top_hits = np.zeros(len(mask_vocab), dtype=np.int32)
+    reach_hits = np.zeros(len(mask_vocab), dtype=np.int32)
+    witness_sum = np.zeros(len(mask_vocab), dtype=np.float64)
     composition = []
     num_kept = int(round(len(forms) * .25))
     for trial in range(mask_trials):
         visible = np.zeros(len(forms), dtype=np.int8)
         visible[rng.choice(len(forms), size=num_kept, replace=False)] = 1
-        witness_count = np.add.reduceat(visible[flat], ptr[:-1])
-        reached = witness_count > 0
-        visible_counts += reached.astype(np.int32)
-        visible_neighbor_sum += witness_count
-        eligible = np.flatnonzero(reached)
-        k = min(top_k, len(eligible))
+        support = np.add.reduceat(visible[flat], ptr[:-1])
+        present = (self_ids >= 0) & (visible[self_ids.clip(min=0)] != 0)
+        eligible = ~present
+        reach_hits += ((support > 0) & eligible).astype(np.int32)
+        witness_sum += support * eligible
+        possible = np.flatnonzero((support > 0) & eligible)
+        k = min(top_k, len(possible))
         if not k:
-            composition.append({'trial': trial, 'later_attested': 0,
-                                'unattested': 0})
+            composition.append({'trial': trial, 'deleted_training': 0,
+                                'later_attested': 0, 'unattested': 0})
             continue
-        tie = rng.random(len(eligible)) * .49
-        ranking = witness_count[eligible] + tie
-        chosen = eligible[np.argpartition(ranking, -k)[-k:]]
+        ranking = support[possible] + rng.random(len(possible)) * .49
+        chosen = possible[np.argpartition(ranking, -k)[-k:]]
         top_hits[chosen] += 1
-        positive = sum(outer[i]['attested_later'] for i in chosen)
-        composition.append({'trial': trial, 'later_attested': positive,
-                            'unattested': k - positive})
-    for i, row in enumerate(outer):
+        parts = np.bincount(kinds[chosen], minlength=3)
+        composition.append({'trial': trial, 'deleted_training': int(parts[0]),
+                            'later_attested': int(parts[1]),
+                            'unattested': int(parts[2])})
+    index = {w: i for i, w in enumerate(mask_vocab)}
+    for row in outer:
+        i = index[row['word']]
         row['top500_pct'] = round(100 * top_hits[i] / max(mask_trials, 1), 4)
-        row['reachable_pct'] = round(100 * visible_counts[i] / max(mask_trials, 1), 4)
-        row['mean_visible_witnesses'] = round(visible_neighbor_sum[i] /
+        row['reachable_pct'] = round(100 * reach_hits[i] / max(mask_trials, 1), 4)
+        row['mean_visible_witnesses'] = round(witness_sum[i] /
                                               max(mask_trials, 1), 4)
     results['deletion_masks'] = {
         'trials': mask_trials, 'survive_fraction': .25, 'top_k': top_k,
+        'mean_deleted_training_topk': round(sum(c['deleted_training']
+            for c in composition) / max(mask_trials, 1), 4),
         'mean_later_attested_topk': round(sum(c['later_attested']
+            for c in composition) / max(mask_trials, 1), 4),
+        'mean_unattested_topk': round(sum(c['unattested']
             for c in composition) / max(mask_trials, 1), 4)}
     if lexicon is not None:
         results['dictionary_coverage'] = {
