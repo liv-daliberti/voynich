@@ -1,0 +1,47 @@
+{
+  "status": "exploratory_connected_source_calculation",
+  "source": "ZL3b-n, strict per-page language label",
+  "A": {
+    "tokens": 11063,
+    "types": 3001,
+    "edges": 12654,
+    "context": {
+      "baseline": 4.03403,
+      "degree_matched_rewired": 3.92089,
+      "real_edit_graph": 3.91369
+    },
+    "five_folio_windows": {
+      "active": 287.7,
+      "births": 204.55,
+      "deaths": 207.09,
+      "node_jaccard": 0.1642,
+      "edge_jaccard": 0.1575
+    },
+    "deleted_nodes_top500": {
+      "graph_recall": 0.22739,
+      "glyph_recall": 0.12097
+    }
+  },
+  "B": {
+    "tokens": 22843,
+    "types": 4557,
+    "edges": 19466,
+    "context": {
+      "baseline": 3.62393,
+      "degree_matched_rewired": 3.52606,
+      "real_edit_graph": 3.51875
+    },
+    "five_folio_windows": {
+      "active": 587.2,
+      "births": 408.125,
+      "deaths": 392.94,
+      "node_jaccard": 0.19606,
+      "edge_jaccard": 0.19395
+    },
+    "deleted_nodes_top500": {
+      "graph_recall": 0.20906,
+      "glyph_recall": 0.0724
+    }
+  },
+  "warning": "Not independently rerun on full source via Python; code + fixture tests in downloadable archive."
+}
