@@ -5,7 +5,7 @@ from experiments.english_controls.benchmark import (
     character_edits, clean_gutenberg, english_features, evaluate_sample,
 )
 from experiments.context.slot_filling import (
-    evaluate_cloze, graph_stats, shuffle_within_group_position,
+    evaluate_cloze, evaluate_seen_control, graph_stats, shuffle_within_group_position,
 )
 
 
@@ -72,3 +72,17 @@ def test_masks_include_deleted_training_forms():
     assert all(m['deleted_training'] + m['later_attested'] +
                m['unattested'] <= 12 for m in masks)
     assert any(m['deleted_training'] > 0 for m in masks)
+
+
+def test_seen_word_context_positive_control():
+    # Two English-like frames whose central words have the same length,
+    # training frequency and block-specific position.
+    sequences = [('folio1', ['the', 'cat', 'sits']) for _ in range(40)]
+    sequences += [('folio1', ['our', 'dog', 'runs']) for _ in range(40)]
+    # Mix events before splitting to ensure both frames appear in train/test.
+    sequences = [s for i in range(40) for s in
+                 (sequences[i], sequences[i + 40])]
+    result = evaluate_seen_control(sequences, eva=False, negatives=1,
+                                   max_tasks=30)
+    assert result['task_count'] > 0
+    assert result['metrics']['observed_context']['pairwise_accuracy'] > .9
