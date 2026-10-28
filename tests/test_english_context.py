@@ -26,7 +26,7 @@ def test_gutenberg_trim_and_normalization():
 
 
 def test_attestation_labels_cannot_leak_into_train_features():
-    train = ['cat', 'cot', 'cut', 'cat', 'cot', 'cut']
+    train = ['cat', 'cot', 'cut', 'sit', 'cat', 'cot', 'cut', 'sit']
     a, summary, _, _ = english_features(train, ['cit'], min_degree=2)
     b, _, _, _ = english_features(train, ['cit', 'citrus'], min_degree=2)
     by_a = {r['word']: r for r in a}
