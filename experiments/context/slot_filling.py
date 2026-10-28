@@ -296,6 +296,12 @@ def run(zl, austen, darwin, out, token_budgets=(11063, 22843)):
             writer.writerow(['previous', 'next', 'training_count'])
             for (a, b), count in edges.most_common(200):
                 writer.writerow([a, b, count])
+        with (out / f'{label}_transition_graph.dot').open('w') as fp:
+            fp.write('digraph word_transitions {\n  rankdir=LR;\n')
+            for (a, b), count in edges.most_common(80):
+                # Tokens are lowercase alphabetic only; safe graph labels.
+                fp.write(f'  "{a}" -> "{b}" [label="{count}", weight={count}];\n')
+            fp.write('}\n')
     (out / 'summary.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result, indent=2))
     return result
