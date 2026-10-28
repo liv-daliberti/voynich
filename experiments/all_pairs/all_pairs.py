@@ -22,16 +22,16 @@ def parse_counts(text: str) -> dict[str,collections.Counter]:
     counts={"A":collections.Counter(),"B":collections.Counter()}
     lang=None
     for line in text.splitlines():
-        h=re.match(r"^<([^.,>]+)>\\s*<!\\s*(.*?)>",line)
+        h=re.match(r"^<([^.,>]+)>\s*<!\s*(.*?)>",line)
         if h:
-            marker=re.search(r"\\$L=([AB])(?:\\s|$)",h.group(2))
+            marker=re.search(r"\$L=([AB])(?:\s|$)",h.group(2))
             lang=marker.group(1) if marker else None
             continue
-        m=re.match(r"^<([^>,]+),([^>]+)>\\s*(.*)$",line)
+        m=re.match(r"^<([^>,]+),([^>]+)>\s*(.*)$",line)
         if not m or not re.search(r"[+@*=]P",m.group(2)) or lang not in counts:
             continue
-        payload=re.sub(r"<![^>]*>|<%>|<\\$>|\\{[^}]*\\}"," ",m.group(3)).replace("<->",".")
-        counts[lang].update(w for w in re.split(r"[.,\\s]+",payload) if re.fullmatch(r"[a-z]+",w))
+        payload=re.sub(r"<![^>]*>|<%>|<\$>|\{[^}]*\}"," ",m.group(3)).replace("<->",".")
+        counts[lang].update(w for w in re.split(r"[.,\s]+",payload) if re.fullmatch(r"[a-z]+",w))
     return counts
 
 

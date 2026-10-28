@@ -1,0 +1,57 @@
+name: Reproduce English and context controls
+# Runs once when this workflow is changed on the experiment branch.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experiments/phonotactic-attestation
+    paths:
+      - .github/workflows/corpus-replication.yml
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install analysis dependencies
+        run: pip install -r requirements.txt cmudict==1.1.3
+      - name: Fetch original source corpora
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data results
+          curl -fsSL --retry 3 -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL --retry 3 -o data/1228.txt https://raw.githubusercontent.com/GITenberg/On-the-Origin-of-Species-By-Means-of-Natural-Selection--13-Or-the-Preservation-of-Favoured-Rac__1228/master/1228.txt
+          curl -fsSL --retry 3 -o data/nathist_output_ciphertext.txt https://raw.githubusercontent.com/greshko/naibbe-cipher/main/encrypted/nathist_output_ciphertext.txt
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          sha256sum data/* | tee results/source_sha256.txt
+      - name: Run English and Naibbe controls with 500 masks
+        run: |
+          python experiments/english_controls/benchmark.py \
+            --austen data/1342-0.txt --darwin data/1228.txt \
+            --naibbe data/nathist_output_ciphertext.txt \
+            --tokens 11063 22843 --trials 500 \
+            --out results/english_controls
+      - name: Audit candidates against an independent English pronunciation lexicon
+        shell: bash
+        run: |
+          python -c 'import cmudict; from pathlib import Path; words=sorted({w.lower() for w in cmudict.words() if w.isascii() and w.isalpha()}); Path("data/cmudict_words.txt").write_text(chr(10).join(words)+chr(10)); print("CMUdict",cmudict.__version__,len(words))'
+          sha256sum data/cmudict_words.txt | tee results/lexicon_sha256.txt
+          python experiments/english_controls/lexicon_audit.py --lexicon data/cmudict_words.txt --candidates results/english_controls/austen_11063_candidates.csv results/english_controls/austen_22843_candidates.csv results/english_controls/darwin_11063_candidates.csv results/english_controls/darwin_22843_candidates.csv --min-length 3 --top 100 --out results/english_controls/lexicon_audit.json
+      - name: Run sentence and line transition cloze controls
+        run: |
+          python experiments/context/slot_filling.py \
+            --zl data/ZL3b-n.txt --austen data/1342-0.txt \
+            --darwin data/1228.txt --out results/context
+      - name: Archive source hashes and all outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voynich-controls-results
+          path: results/
+          retention-days: 30
+          if-no-files-found: warn
