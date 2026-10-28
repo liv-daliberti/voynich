@@ -1,0 +1,11 @@
+# Do not accidentally commit huge downloads or derivative data
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+*.pyc
+.env
+.venv/
+*.egg-info/
+data/*.txt
+results/reproduced/
+*.DS_Store
