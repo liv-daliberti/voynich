@@ -221,7 +221,10 @@ def score_events(fitted, sequences, max_events=900, seed=20261028):
             metric["nll"] += -math.log(max(p, 1e-300))
             metric["top1"] += int(bool(guess) and guess[0][0] == truth)
             metric["top5"] += int(any(w == truth for w, _ in guess))
-            metric["entropy"] += entropy(dist)
+            H = entropy(dist)
+            metric["entropy"] += H
+            metric[f"depth_{depth}_entropy"] += H
+            metric["effective_candidates"] += math.exp(H)
             metric["top5_mass"] += sum(p for _, p in guess)
             metric[f"depth_{depth}_nll"] += -math.log(max(p, 1e-300))
             metric[f"depth_{depth}_count"] += 1
@@ -243,6 +246,11 @@ def score_events(fitted, sequences, max_events=900, seed=20261028):
             "top1": round(sums["top1"] / n, 5) if n else None,
             "top5": round(sums["top5"] / n, 5) if n else None,
             "mean_entropy_nats": round(sums["entropy"] / n, 5) if n else None,
+            "mean_effective_candidate_count": round(sums["effective_candidates"] / n, 5) if n else None,
+            "mean_entropy_by_prefix_depth": {
+                str(k): round(sums[f"depth_{k}_entropy"] /
+                              sums[f"depth_{k}_count"], 5)
+                if sums[f"depth_{k}_count"] else None for k in range(5)},
             "mean_top5_mass": round(sums["top5_mass"] / n, 5) if n else None,
             "nll_by_prefix_depth": {
                 str(k): round(sums[f"depth_{k}_nll"] /
