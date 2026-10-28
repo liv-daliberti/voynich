@@ -1,73 +1,33 @@
-# Exact fixed-target grammar lattice and cross-corpus structure transfer
+# Fixed future words, exact probability lattices, grammar transfer and graph matching
 
-Research extension, October 28 2026. **Not a decipherment or English-to-Voynich translation.**
+This folder contains three **distinct** experiments on the same ZL3b, Austen and Darwin sources, with a fourth *procedural null*: the openly published Timm–Schinner self-citation generated text sample.
 
-## Questions
+- `fixed_target.py`: a six-state unsupervised HMM. Exact forward marginal `P(W_T | W_<t)` over **all latent paths**. For Voynich, the first run found no useful improvement over position-preserving shuffling, **including failure to find a strong positive control in English**. The model's learned latent classes are **not** human-identified parts of speech. A heuristic Hungarian matching of state descriptors transplants English transitions into a Voynich model with Voynich emissions. Even if NLL improves by a small amount, **without an English positive control and repeated seeds it is not evidence of translation or transferable grammar**.
+- `word_lattice.py`: more robust exact word-transition graph with sparse, normalized next-word transitions. Smoothing is selected by a **training-only inner validation split** from candidates 0.5, 2, 8, 32, 128. For one held-out target position, the forward operator sums probability over every possible intervening word state, including an `<UNK>` bucket. Compare no prefix, partial prefix, and immediate predecessor against a word-order shuffle that preserves positions and token frequency. A bigram only remembers the immediately preceding observed word and has short predictive memory, by design.
+- `structural_alignment.py`: a separate **graph matching** hypothesis. Construct directed word-context graphs using *word frequency, line-start/end propensity, predecessor/successor diversity and entropy*, not token spellings. First try to recover a **known random renaming of English words** across two disjoint English subsets. Then fit English-to-Voynich **structural analogies**, without semantic labels. Compare similarity against position-preserving shuffled target word order. Descriptors are approximate; matching can be arbitrary and should not be read as an English-Voynich dictionary.
 
-1. Does grammar-like regularity in a previously observed prefix improve the prediction of a **fixed later position** `T` as each word from positions 0 through `T-1` is revealed?
-2. Are learned latent **word classes and class transitions** portable between English prose and Voynich paragraphs, even though no words are aligned or translated?
-3. Can a published **copy/edit procedural control** produce similar predictive structure?
+**Do not conflate**: A self-citation sample vs a full replication of its generator; anonymous latent roles vs human grammar; graph similarity vs semantic alignment; unseen words collapsed into `<UNK>` vs explicit prediction of novel EVA strings; corpus folio order vs genuine time.
 
-## Data and baselines
+## Reproduction
 
-- Voynich: paragraph *lines* in Currier A/B from the original ZL3b transcription. A line is not assumed to be a sentence.
-- English: Austen and Darwin, first 22,843 words, split at ~70% of complete training sequences. English sentence segmentation is heuristic.
-- Procedural control: the **sample text published with Timm and Schinner's self-citation generator** (see their public GitHub repository). We use the actual generated file, **not a reimplementation of their algorithm or a claim that this is the only parameterization**.
-- Training order null: shuffle word tokens within folio/English pseudo-block and start/middle/end position, preserving word counts and position marginals.
-
-## Model and exact prediction
-
-Each corpus gets a **separately learned** discrete hidden-state Markov model with six states, unsupervised Baum–Welch training, at most 450 common word types plus `<UNK>`. This is a low-data structural baseline; hidden states are *anonymous*. Both vocabulary and parameters are derived from training only. A word absent from the 450-word vocabulary is scored as `<UNK>`, not falsely assigned probability zero. We separately report seen-vocabulary scores.
-
-For a fixed target index `T` (zero-based), after observing the first `t` words (`0 <= t <= T`):
-
-- Filter the hidden-state distribution by the observed prefix;
-- Advance this distribution with the **transition matrix for exactly the missing number of positions**;
-- Emit all possible word forms by multiplying by the emission matrix.
-
-Explicitly, for `t > 0`:
-
-`P(W_T=w | W_0,...,W_{t-1}) = [alpha_(t-1) A^(T-t+1) B]_w`.
-
-For `t=0`, use `pi A^T B`. This is an **exact sum across all intermediate latent state paths**. No beam pruning is involved.
-
-At each `T in {3,5,7,9}`, evaluate all prefix depths `t=0,...,T`, on the *same* randomly sampled held-out test targets. Report mean target NLL, full-distribution entropy, Brier score, seen-vocabulary NLL, and log probability improvement relative to zero context.
-
-An exact probabilistic **state lattice** (6 states per layer, all weighted edges retained) is saved for example targets. Unlike a beam, its total state mass is one; meaningful state class descriptions require additional validation.
-
-## Transfer from English structure (without lexical translation)
-
-Fit models separately to English and Voynich; align anonymous latent states with **Hungarian matching on per-state descriptors learned exclusively from training**: start occupancy, stationary occupancy, self-transition, emission entropy normalized by vocabulary size, and outgoing transition entropy. The donor state's **transition probabilities only** are transplanted into a Voynich model. Voynich emission probabilities and vocabulary remain Voynich; there is no bilingual mapping.
-
-Predict held-out Voynich targets using (a) its native transition model, (b) Austen transitions, (c) Darwin transitions, (d) Timm/Schinner generated sample transitions, and (e) Voynich trained on position-preserving shuffled sequences. **Successful transfer would mean shared statistical roles, not that a Voynich word translates to any English word.** The Hungarian descriptor approach itself is a weak heuristic and can produce arbitrary mappings for nonidentifiable states.
-
-## Run
+GitHub Actions workflow `.github/workflows/latent-grammar-replication.yml` downloads the original four source texts, saves SHA256 hashes, runs all three experiments and archives their summary JSON and prefix/lattice traces. Unit tests check exact forward probabilities against matrix powers and brute-force enumeration; test that renaming destroys spellings without destroying graph signal; and verify that hidden-path sums remain normalized.
 
 ```bash
-python experiments/latent_grammar/fixed_target.py \
-  --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt \
-  --generated data/timm_generated.txt --out results/latent_grammar_lattice \
-  --states 6 --em-iterations 5 --max-targets 130
+python experiments/latent_grammar/fixed_target.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --out results/latent_grammar_lattice
+python experiments/latent_grammar/word_lattice.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --out results/word_lattice
+python experiments/latent_grammar/structural_alignment.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --out results/structural_alignment
 ```
 
-CI downloads original sources and reports SHA-256 fingerprints and outputs. Detailed per-example traces and source hashes are archived, not committed transcriptions.
+## Literature and next rigorous tests
 
-## Interpretation constraints
+- Rabiner (1989), HMMs and exact forward/backward lattice marginalization.
+- Timm & Schinner (2020), *A possible generating algorithm of the Voynich manuscript*, Cryptologia; original sample generated with their published code at https://github.com/TorstenTimm/SelfCitationTextgenerator.
+- Bowern & Lindemann (2021), *The Linguistics of the Voynich Manuscript*, Annual Review of Linguistics.
+- Conneau et al. (2018), *Word Translation Without Parallel Data*, and Lample et al. (2018), *Unsupervised Machine Translation Using Monolingual Corpora Only*.
+- Søgaard, Ruder & Vulić (2018), *On the Limitations of Unsupervised Bilingual Dictionary Induction*. Cross-domain / low-resource failure modes are especially relevant.
+- Marchisio, Duh & Koehn (2020), *When Does Unsupervised Machine Translation Work?*
+- Graça et al. (2011), *Controlling Complexity in Part-of-Speech Induction*. Vanilla maximum likelihood HMM class induction has well-known limitations; anchor-HMM or regularized class models are stronger comparisons.
+- Stratos, Collins & Hsu (2016), *Unsupervised Part-of-Speech Tagging with Anchor Hidden Markov Models*.
+- Brown et al. (1992), *Class-Based n-gram Models of Natural Language*.
 
-- The 450-type vocabulary is **not** a true generative open-vocabulary model. The `<UNK>` channel collapses many rare/unobserved forms. Do not interpret cross-corpus raw NLLs without matching token coverage.
-- Hidden-state class correspondences are not identifiable without semantic anchors. Different initial seeds can permute or mix states. **No decipherment claim**.
-- Natural English sentence boundaries and Voynich line boundaries are not equivalent.
-- A held-out result for one folio order is not chronological language change. Repeat by blocked folio/section, many seeds, and multiple text windows.
-- The procedural control's source text is a sample with fixed configuration; compare more Timm/Schinner generator configurations before treating it as a mechanistic falsification.
-- English vs Voynich should ultimately be tested against the same alternative model families and matched token budgets, while controlling for differences in alphabet, word length and sampling.
-- Cross-language structural alignment needs a positive control (Austen to Darwin, and preferably an artificially enciphered English corpus) and a shuffled/random alignment control before any interpretation.
-- Exact state-path marginalization is possible because the hidden-state space is small and Markov. A full word-level beam/lattice with spelling invention would require a **separate normalized emission model** and pruning-mass accounting.
-
-## References
-
-- Rabiner, 1989: HMM forward-backward methodology.
-- Bowern and Lindemann, 2021: *The Linguistics of the Voynich Manuscript*, Annual Review of Linguistics.
-- Timm and Schinner, 2020: *A possible generating algorithm of the Voynich manuscript*, Cryptologia. Published generator sample: https://github.com/TorstenTimm/SelfCitationTextgenerator
-- Conneau et al., 2018: *Word Translation Without Parallel Data* (ICLR).
-- Søgaard, Ruder and Vulić, 2018: *On the Limitations of Unsupervised Bilingual Dictionary Induction*, ACL.
-- Marchisio, Duh and Koehn, 2020: *When Does Unsupervised Machine Translation Work?*, WMT.
+Before making a Voynich-to-English semantic proposal: show known-renaming accuracy above frequency-rank matching on **independent English splits** and ideally on artificial English substitution ciphers with independent text; compare random assignment and Timm sample; use several folio blocks/seeds and uncertainty; document which aspect of morphology/word order anchors the two corpora. A high-scoring graph correspondence without independent bilingual evidence is **not a decipherment**.
