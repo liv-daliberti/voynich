@@ -107,7 +107,6 @@ def align(left:ContextGraph,right:ContextGraph, graph_weight=20.,
         updated=rj[np.argsort(li)]
         if np.array_equal(updated,perm):break
         perm=updated
-    graph_sim=left.matrix@np.eye(len(perm))[:,perm].T
     # Compare transition patterns after aligning donor states to source.
     reordered=right.matrix[np.ix_(perm,perm)]
     return perm,{
@@ -172,7 +171,6 @@ def cross_structure(source, target, k=70):
 
 def run(zl_file,austen_file,darwin_file,out,k=70):
     raw=Path(zl_file).read_text(encoding="utf-8-sig")
-    corpora={s:voynich_lines(raw,s) for s in []}
     corpora={"Voynich_A":voynich_lines(raw,"A"),
              "Voynich_B":voynich_lines(raw,"B")}
     english={}
