@@ -2,7 +2,9 @@ name: Prefix beam experiment
 on:
   push:
     branches: [prefix-beam-lattice]
-    paths: [.github/workflows/prefix-beam-replication.yml]
+    paths:
+      - .github/workflows/prefix-beam-replication.yml
+      - experiments/prefix_lattices/**
   workflow_dispatch:
 jobs:
   reproduce:
