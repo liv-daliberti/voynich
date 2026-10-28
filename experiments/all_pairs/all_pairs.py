@@ -18,17 +18,22 @@ def glyphs(word: str) -> tuple[str,...]:
     return tuple(out)
 
 def parse_counts(text: str) -> dict[str,collections.Counter]:
+    """Strict folio-header language classification. Unknown pages excluded."""
     counts={"A":collections.Counter(),"B":collections.Counter()}
     lang=None
     for line in text.splitlines():
-        h=re.match(r"^<f[^.>]+>.*?\$L=([AB])",line)
+        h=re.match(r"^<([^.,>]+)>\\s*<!\\s*(.*?)>",line)
         if h:
-            lang=h.group(1);continue
-        m=re.match(r"^<f[^.>]+\.\d+,[+@*=]P[^>]*>\s*(.*)$",line)
-        if not m or lang not in counts: continue
-        cleaned=re.sub(r"<![^>]*>|<%>|<\$>|\{[^}]*\}"," ",m.group(1)).replace("<->",".")
-        counts[lang].update(w for w in re.split(r"[.,\s]+",cleaned) if re.fullmatch(r"[a-z]+",w))
+            marker=re.search(r"\\$L=([AB])(?:\\s|$)",h.group(2))
+            lang=marker.group(1) if marker else None
+            continue
+        m=re.match(r"^<([^>,]+),([^>]+)>\\s*(.*)$",line)
+        if not m or not re.search(r"[+@*=]P",m.group(2)) or lang not in counts:
+            continue
+        payload=re.sub(r"<![^>]*>|<%>|<\\$>|\\{[^}]*\\}"," ",m.group(3)).replace("<->",".")
+        counts[lang].update(w for w in re.split(r"[.,\\s]+",payload) if re.fullmatch(r"[a-z]+",w))
     return counts
+
 
 def distance_one(a:tuple[str,...],b:tuple[str,...]) -> bool:
     if abs(len(a)-len(b))>1:return False
