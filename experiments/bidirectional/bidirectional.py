@@ -225,6 +225,7 @@ def paired_cluster_bootstrap(real_lines, shuffled_lines,
     labels=sorted(groups)
     rng=np.random.default_rng(seed)
     metrics=("backward_minus_forward",
+             "backward_minus_forward_shuffle_advantage",
              "real_vs_shuffle_forward",
              "real_vs_shuffle_backward",
              "real_vs_shuffle_both")
@@ -236,6 +237,9 @@ def paired_cluster_bootstrap(real_lines, shuffled_lines,
             "backward_minus_forward":sum(
                 a["backward"]-a["forward"] for key in draw
                 for a,_ in groups[key])/total,
+            "backward_minus_forward_shuffle_advantage":sum(
+                (b["backward"]-a["backward"])-(b["forward"]-a["forward"])
+                for key in draw for a,b in groups[key])/total,
             **{f"real_vs_shuffle_{k}":sum(
                 b[k]-a[k] for key in draw for a,b in groups[key])/total
                for k in ("forward","backward","both")}}
