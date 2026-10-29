@@ -258,6 +258,14 @@ def run(files,out,steps=120,side=32,K=40,seed=29,test_count=2):
         grids.append(code[pos:pos+count].reshape(shape))
         pos+=count
     gen=SpatialTokenModel(K);gen.fit(grids)
+    # The genuine heldout images are embedded/quantized using the FROZEN
+    # encoder and codebook. The generator never saw their patches.
+    test_patches=np.concatenate([
+        patches(a,side).reshape(-1,side,side) for a in test])
+    test_ids=kmeans.predict(embed(contrast,test_patches))
+    test_grids=[test_ids[i*shape[0]*shape[1]:
+                         (i+1)*shape[0]*shape[1]].reshape(shape)
+                for i in range(len(test))]
     generated=gen.sample(shape,seed+20)
     iid=gen.sample(shape,seed+20,iid=True)
     genimg=reconstruct(generated,renderer,side)
@@ -278,6 +286,10 @@ def run(files,out,steps=120,side=32,K=40,seed=29,test_count=2):
         "iid_pseudo_script":pseudo_transcribe(iidimg),
         "heldout_pseudo_script":[pseudo_transcribe(Image.fromarray(x))
                                  for x in test],
+        "generated_vs_heldout_visual_distribution":distribution_metrics(
+            generated,test_grids,gen),
+        "iid_vs_heldout_visual_distribution":distribution_metrics(
+            iid,test_grids,gen),
         "generated_visual_distribution":distribution_metrics(
             generated,grids,gen),
         "iid_visual_distribution":distribution_metrics(iid,grids,gen),
@@ -292,6 +304,8 @@ def run(files,out,steps=120,side=32,K=40,seed=29,test_count=2):
         "train":len(train),"heldout":len(test),"steps":steps,
         "conditional_visual_js":stats["generated_visual_distribution"],
         "iid_visual_js":stats["iid_visual_distribution"],
+        "generated_vs_heldout":stats["generated_vs_heldout_visual_distribution"],
+        "iid_vs_heldout":stats["iid_vs_heldout_visual_distribution"],
         "pseudo_script":stats["generated_pseudo_script"]}),flush=True)
     return stats
 
