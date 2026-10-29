@@ -168,14 +168,14 @@ def evaluate(fwd, bwd, heldout, max_lines=55, seed=20261028,
                     stat["gain"]+=math.log(max(prob,1e-300))-math.log(
                         max(first_p,1e-300))
                     stat["entropy"]+=entropy(dist)
-                    if include_traces and len(examples)<4:
+                    if include_traces and len(examples)<8 and i>=3 and ri>=3:
                         choices=np.argsort(-dist)[:5]
                         samples.append({"revealed":t,
                           "gap":j-t, "truth_probability":round(prob,7),
                           "entropy":round(entropy(dist),5),
                           "top5":[[walker.model.vocab[int(k)],
                             round(float(dist[k]),6)] for k in choices]})
-                if include_traces and len(examples)<4:
+                if include_traces and len(examples)<8 and i>=3 and ri>=3:
                     if direction=="from_start":
                         examples.append({"group":group,"line":line,
                           "target_index":i,"target_word":truth,"direction":direction,
