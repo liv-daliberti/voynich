@@ -32,10 +32,29 @@ jobs:
           curl -fsSL --retry 3 -o data/naibbe.txt https://raw.githubusercontent.com/greshko/naibbe-cipher/main/encrypted/nathist_output_ciphertext.txt
           curl -fsSL --retry 3 -o data/timm.txt https://raw.githubusercontent.com/TorstenTimm/SelfCitationTextgenerator/master/executable/generate/generated_text.txt
           sha256sum data/* > results/persistence_innovation/source_sha256.txt
+      - name: Install Java for actual Timm-Schinner generator
+        if: matrix.cohort == 'Timm'
+        uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Produce fresh 5,000-line Timm manuscript
+        if: matrix.cohort == 'Timm'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/TorstenTimm/SelfCitationTextgenerator.git data/timm_upstream
+          git -C data/timm_upstream checkout --detach a6ede2202dd7ad6285ce2c007bf22c2a0e7709b7
+          cd data/timm_upstream/executable
+          sed -i 's/^method.random.pseudo.seed=.*/method.random.pseudo.seed=29/' conf.properties
+          sed -i 's/^text.lines_to_create=.*/text.lines_to_create=5000/' conf.properties
+          java -jar text-generator.jar
+          test -s generate/generated_text.txt
+          cp generate/generated_text.txt ../../timm_full.txt
+          cd ../../..
+          sha256sum data/timm_full.txt data/timm_upstream/executable/text-generator.jar data/timm_upstream/executable/conf.properties >> results/persistence_innovation/source_sha256.txt
       - name: Run distinct source-to-next-page persistence and innovation graphs
         shell: bash
         run: |
-          python experiments/persistence_innovation/graphs.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --naibbe data/naibbe.txt --generated data/timm.txt --mode ${{ matrix.cohort }} --permutations 80 --out results/persistence_innovation/${{ matrix.cohort }}
+          python experiments/persistence_innovation/graphs.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --naibbe data/naibbe.txt --generated data/timm_full.txt --mode ${{ matrix.cohort }} --permutations 80 --out results/persistence_innovation/${{ matrix.cohort }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
