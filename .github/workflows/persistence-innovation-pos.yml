@@ -54,7 +54,7 @@ jobs:
       - name: Run distinct source-to-next-page persistence and innovation graphs
         shell: bash
         run: |
-          python experiments/persistence_innovation/graphs.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --naibbe data/naibbe.txt --generated data/timm_full.txt --mode ${{ matrix.cohort }} --permutations 8 --out results/persistence_innovation/${{ matrix.cohort }}
+          python experiments/persistence_innovation/graphs.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --naibbe data/naibbe.txt --generated data/timm_full.txt --mode ${{ matrix.cohort }} --permutations 120 --out results/persistence_innovation/${{ matrix.cohort }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
