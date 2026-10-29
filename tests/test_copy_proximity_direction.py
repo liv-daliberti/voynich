@@ -1,5 +1,5 @@
 """Small fixtures for local copying, reverse direction and leakage controls."""
-from experiments.local_copy.evaluate import neighborhood_map, measure_page, shuffled_folio, run_corpus
+from experiments.local_copy.evaluate import neighborhood_map, measure_page, shuffled_folio, shuffled_line_order, run_corpus
 from experiments.higher_order_direction.evaluate import (posbin,ConditionalNgram,blocked_folds,one_corpus)
 from experiments.robustness75.robustness import glyphs
 
@@ -69,3 +69,10 @@ def test_higher_order_fold_reports_include_directional_gain():
     result=one_corpus(seq,folds=4,max_vocab=20)
     assert result['aggregate']['fourgram']['folios']==8
     assert 'reverse_specific_gain' in result['aggregate']['fourgram']
+
+
+def test_shuffling_whole_lines_preserves_internal_order():
+    lines=[['a','foo','bar'],['b','baz','bat'],['c','can','far']]
+    shifted=shuffled_line_order(lines,11)
+    assert sorted(map(tuple,shifted))==sorted(map(tuple,lines))
+    assert [len(x) for x in shifted]==[len(x) for x in lines]
