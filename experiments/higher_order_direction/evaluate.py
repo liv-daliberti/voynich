@@ -100,19 +100,23 @@ def eval_model(model,lines,modes=MODES):
     return accum,per_page
 
 
-def choose_alpha(seqs,direction, max_vocab=1200):
+def choose_alpha(seqs,direction,max_vocab=1200):
+    """Joint inner-only tuning; includes unigram-like smoothing regimes."""
     groups=groups_in_order(seqs)
-    if len(groups)<6:return 64,{}
+    if len(groups)<6:return (1024,1000),{}
     val=set(groups[::5])
     train=[(g,w) for g,w in seqs if g not in val]
     dev=[(g,w) for g,w in seqs if g in val]
     scores={}
-    for alpha in (4,16,64,256,1024):
-        m=ConditionalNgram(train,direction,alpha,max_vocab)
-        result,_=eval_model(m,dev,('fourgram',))
-        n,ll=result[('fourgram','all')]
-        scores[str(alpha)]=round(ll/n,6)
-    return min(scores,key=lambda x:scores[x]) and int(min(scores,key=scores.get)),scores
+    for pos_alpha in (50,1000,10000):
+        for alpha in (16,128,1024,8192):
+            m=ConditionalNgram(train,direction,alpha,max_vocab,
+                               pos_alpha=pos_alpha)
+            result,_=eval_model(m,dev,('fourgram',))
+            n,ll=result[('fourgram','all')]
+            scores[f'{alpha}/{pos_alpha}']=round(ll/n,6)
+    best=min(scores,key=scores.get)
+    return tuple(map(int,best.split('/'))),scores
 
 
 def one_corpus(lines, folds=4, max_vocab=1200, seed=20261028):
@@ -123,12 +127,12 @@ def one_corpus(lines, folds=4, max_vocab=1200, seed=20261028):
         shuffled=shuffle_within_group_position(train,seed+f)
         direction_details={}
         for direction in ('forward','backward'):
-            alpha,grid=choose_alpha(train,direction,max_vocab)
-            real=ConditionalNgram(train,direction,alpha,max_vocab)
-            null=ConditionalNgram(shuffled,direction,alpha,max_vocab)
+            (alpha,pos_alpha),grid=choose_alpha(train,direction,max_vocab)
+            real=ConditionalNgram(train,direction,alpha,max_vocab,pos_alpha=pos_alpha)
+            null=ConditionalNgram(shuffled,direction,alpha,max_vocab,pos_alpha=pos_alpha)
             a,pages=eval_model(real,test)
             b,null_pages=eval_model(null,test)
-            direction_details[direction]={'alpha':alpha,'validation_grid':grid,
+            direction_details[direction]={'alpha':alpha,'position_alpha':pos_alpha,'validation_grid':grid,
                 'metrics':{mode:{part:{'n':a[(mode,part)][0],
                     'real_nll':round(a[(mode,part)][1]/a[(mode,part)][0],6) if a[(mode,part)][0] else None,
                     'shuffle_nll':round(b[(mode,part)][1]/b[(mode,part)][0],6) if b[(mode,part)][0] else None}
