@@ -1,0 +1,89 @@
+name: Within-quire source prediction and word-ego evolution
+on:
+  workflow_dispatch:
+  push:
+    branches: [within-quire-word-egos]
+    paths:
+      - experiments/within_quire/**
+      - experiments/word_egos/**
+      - tests/test_ego_word_graphs.py
+      - .github/workflows/within-quire-egos.yml
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        cohort: [Voynich, Austen, Timm]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Fetch source transcriptions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data results/within_quire
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL --retry 3 -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          sha256sum data/ZL3b-n.txt data/1342-0.txt > results/within_quire/source_sha256.txt
+      - name: Set up Java for the original Timm-Schinner software
+        if: matrix.cohort == 'Timm'
+        uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Create original software copy-edit control with seed 29
+        if: matrix.cohort == 'Timm'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/TorstenTimm/SelfCitationTextgenerator.git data/timm_upstream
+          git -C data/timm_upstream checkout --detach a6ede2202dd7ad6285ce2c007bf22c2a0e7709b7
+          cd data/timm_upstream/executable
+          sed -i 's/^method.random.pseudo.seed=.*/method.random.pseudo.seed=29/' conf.properties
+          sed -i 's/^text.lines_to_create=.*/text.lines_to_create=5000/' conf.properties
+          java -jar text-generator.jar
+          cp generate/generated_text.txt ../../timm_generated.txt
+          cd ../../..
+          sha256sum data/timm_generated.txt data/timm_upstream/executable/conf.properties data/timm_upstream/executable/text-generator.jar >> results/within_quire/source_sha256.txt
+      - name: Test within-quire next-page source predictiveness
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ matrix.cohort }}" == Voynich ]]; then
+            python experiments/within_quire/predict.py --zl data/ZL3b-n.txt --cohort Voynich --trials 350 --out results/within_quire/voynich.json
+          elif [[ "${{ matrix.cohort }}" == Austen ]]; then
+            python experiments/within_quire/predict.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --cohort Austen --trials 200 --out results/within_quire/austen.json
+          else
+            python experiments/within_quire/predict.py --zl data/ZL3b-n.txt --generated data/timm_generated.txt --cohort Timm --trials 200 --out results/within_quire/timm29.json
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: within-quire-${{ matrix.cohort }}
+          path: results/within_quire
+          retention-days: 30
+          if-no-files-found: warn
+  egos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -r requirements.txt
+      - name: Fetch original text
+        run: |
+          mkdir -p data
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+      - name: Evaluate each word's edit-ego graph evolution
+        run: python experiments/word_egos/evaluate.py --zl data/ZL3b-n.txt --out results/word_egos --trials 350
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: word-ego-graph-histories
+          path: results/word_egos
+          retention-days: 30
+          if-no-files-found: warn
