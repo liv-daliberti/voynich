@@ -1,0 +1,87 @@
+name: Prospective full corpus replication and copy-source tests
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - copy-proximity-higher-order
+    paths:
+      - experiments/higher_order_direction/**
+      - experiments/local_copy/**
+      - tests/test_copy_proximity_direction.py
+      - .github/workflows/full-replication-and-copy.yml
+jobs:
+  phonotactics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -r requirements.txt
+      - name: Download original transcriptions and freeze hashes
+        run: |
+          mkdir -p data results/phonotactics
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL --retry 3 -o data/IT2a-n.txt https://raw.githubusercontent.com/oklo/voynich_gpt/main/IT2a-n.txt
+          sha256sum data/* > results/phonotactics/source_sha256.txt
+      - name: Full source Python reproduction
+        run: python experiments/phonotactics/evaluate.py --zl data/ZL3b-n.txt --it data/IT2a-n.txt --out results/phonotactics
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prospective-full-corpus
+          path: results/phonotactics
+          retention-days: 30
+
+  higher-order:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -r requirements.txt
+      - name: Download sources
+        run: |
+          mkdir -p data results/higher_order_direction
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL --retry 3 -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL --retry 3 -o data/1228.txt https://raw.githubusercontent.com/GITenberg/On-the-Origin-of-Species-By-Means-of-Natural-Selection--13-Or-the-Preservation-of-Favoured-Rac__1228/master/1228.txt
+          sha256sum data/* > results/higher_order_direction/source_sha256.txt
+      - name: Four independent folio folds and English positive controls
+        run: python experiments/higher_order_direction/evaluate.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --out results/higher_order_direction
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: higher-order-independent-folds
+          path: results/higher_order_direction
+          retention-days: 30
+
+  local-copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -r requirements.txt
+      - name: Download source and generator controls
+        run: |
+          mkdir -p data results/local_copy
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL --retry 3 -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL --retry 3 -o data/1228.txt https://raw.githubusercontent.com/GITenberg/On-the-Origin-of-Species-By-Means-of-Natural-Selection--13-Or-the-Preservation-of-Favoured-Rac__1228/master/1228.txt
+          curl -fsSL --retry 3 -o data/timm_generated.txt https://raw.githubusercontent.com/TorstenTimm/SelfCitationTextgenerator/master/executable/generate/generated_text.txt
+          sha256sum data/* > results/local_copy/source_sha256.txt
+      - name: Physical prior horizontal and vertical source exposure
+        run: python experiments/local_copy/evaluate.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --permutations 150 --out results/local_copy
+      - name: Stronger vertical null preserving entire line content
+        run: python experiments/local_copy/evaluate.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --permutations 120 --null-mode line --out results/local_copy_line_order
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-copy-positional-null
+          path: |
+            results/local_copy
+            results/local_copy_line_order
+          retention-days: 30
