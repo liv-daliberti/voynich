@@ -194,8 +194,10 @@ def confidence(rows,field,repetitions=1500,seed=20261028,weight="gold"):
 
 
 def test_conditions(pages,eva,scheme="strict_section_hand",
-                    min_lag=20,size_tolerance=.25,repetitions=1000):
-    models=[precompute_source(p,eva) for p in pages]
+                    min_lag=20,size_tolerance=.25,repetitions=1000,
+                    models=None):
+    if models is None:
+        models=[precompute_source(p,eva) for p in pages]
     ids_by_group=defaultdict(list)
     for i,p in enumerate(pages):ids_by_group[p["language"]].append(i)
     aggregate={}
@@ -224,7 +226,8 @@ def test_conditions(pages,eva,scheme="strict_section_hand",
 
 
 def permutation_null(pages,eva,scheme="strict_section_hand",min_lag=20,
-                     size_tolerance=.25,trials=120,seed=20261028):
+                     size_tolerance=.25,trials=120,seed=20261028,
+                     models=None, observed=None):
     """Permute page assignments within same language, SECTION AND HAND,
     and source-size tertile; recompute source selection and same-target gold.
 
@@ -234,7 +237,8 @@ def permutation_null(pages,eva,scheme="strict_section_hand",min_lag=20,
     """
     rng=np.random.default_rng(seed)
     groups=defaultdict(list)
-    models=[precompute_source(p,eva) for p in pages]
+    if models is None:
+        models=[precompute_source(p,eva) for p in pages]
     by_key=defaultdict(list)
     for idx,p in enumerate(pages):
         by_key[(p["language"],p.get("section_code","?"),
@@ -245,8 +249,9 @@ def permutation_null(pages,eva,scheme="strict_section_hand",min_lag=20,
             # Half-bin with a minimum of 2 pages per source-size band
             size_bin=min(2,(3*rank)//max(1,len(ordered)))
             groups[key+(size_bin,)].append(idx)
-    observed,_=test_conditions(pages,eva,scheme,min_lag,
-                                size_tolerance,250)
+    if observed is None:
+        observed,_=test_conditions(pages,eva,scheme,min_lag,
+                                   size_tolerance,250,models=models)
     null=defaultdict(list)
     for trial in range(trials):
         order=list(range(len(pages)))
@@ -290,14 +295,15 @@ def run(pages,eva,out,name="Voynich",shuffles=100):
     result={"cohort":name,"pages":len(pages),"tokens":sum(
         len(p["words"]) for p in pages),
         "method":"same target gold novel to BOTH near/far source pages"}
+    models=[precompute_source(p,eva) for p in pages]
     all_rows={}
     for scheme in SCHEMES:
-        groups,rows=test_conditions(pages,eva,scheme)
+        groups,rows=test_conditions(pages,eva,scheme,models=models)
         result[scheme]={"observed":groups}
         all_rows[scheme]=rows
         # Shuffled order within section/hand, not a target-word shuffle.
         result[scheme]["page_order_null"]=permutation_null(
-            pages,eva,scheme,trials=shuffles)
+            pages,eva,scheme,trials=shuffles,models=models,observed=groups)
         print(name,scheme,json.dumps(result[scheme]["observed"]),flush=True)
     out=Path(out);out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(result,indent=2)+"\n")
