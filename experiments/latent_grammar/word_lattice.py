@@ -29,7 +29,8 @@ from experiments.latent_grammar.fixed_target import copy_edit_lines
 class WordLattice:
     def __init__(self, sequences, max_vocab=700, smoothing=10.0):
         counts = Counter(w for _, line in sequences for w in line)
-        self.vocab = ["<UNK>"] + [w for w, _ in counts.most_common(max_vocab)]
+        self.vocab = ["<UNK>"] + [w for w, _ in sorted(counts.items(),
+            key=lambda item: (-item[1], item[0]))[:max_vocab]]
         self.index = {w: i for i, w in enumerate(self.vocab)}
         self.V = len(self.vocab)
         self.smoothing = float(smoothing)
