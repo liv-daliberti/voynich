@@ -1,0 +1,76 @@
+name: Persistence innovation graphs and English noun-verb structural probes
+on:
+  workflow_dispatch:
+  push:
+    branches: [persistence-innovation-pos-probes]
+    paths:
+      - experiments/persistence_innovation/**
+      - experiments/word_classes/**
+      - tests/test_persistence_innovation_pos.py
+      - .github/workflows/persistence-innovation-pos.yml
+
+jobs:
+  networks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 27
+    strategy:
+      fail-fast: false
+      matrix:
+        cohort: [Voynich,Austen,Naibbe,Timm]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -r requirements.txt
+      - name: Fetch original corpus and controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data results/persistence_innovation
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL --retry 3 -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL --retry 3 -o data/naibbe.txt https://raw.githubusercontent.com/greshko/naibbe-cipher/main/encrypted/nathist_output_ciphertext.txt
+          curl -fsSL --retry 3 -o data/timm.txt https://raw.githubusercontent.com/TorstenTimm/SelfCitationTextgenerator/master/executable/generate/generated_text.txt
+          sha256sum data/* > results/persistence_innovation/source_sha256.txt
+      - name: Run distinct source-to-next-page persistence and innovation graphs
+        shell: bash
+        run: |
+          python experiments/persistence_innovation/graphs.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --naibbe data/naibbe.txt --generated data/timm.txt --mode ${{ matrix.cohort }} --permutations 80 --out results/persistence_innovation/${{ matrix.cohort }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: persistence-innovation-${{ matrix.cohort }}
+          path: results/persistence_innovation
+          retention-days: 30
+          if-no-files-found: warn
+
+  pos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -r requirements.txt 'nltk==3.9.1'
+      - name: Download English POS model used only to establish English ground truth
+        run: python -c "import nltk; assert nltk.download('averaged_perceptron_tagger_eng',quiet=True)"
+      - name: Fetch same original texts and source checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data results/word_classes
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL --retry 3 -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL --retry 3 -o data/1228.txt https://raw.githubusercontent.com/GITenberg/On-the-Origin-of-Species-By-Means-of-Natural-Selection--13-Or-the-Preservation-of-Favoured-Rac__1228/master/1228.txt
+          curl -fsSL --retry 3 -o data/naibbe.txt https://raw.githubusercontent.com/greshko/naibbe-cipher/main/encrypted/nathist_output_ciphertext.txt
+          curl -fsSL --retry 3 -o data/timm.txt https://raw.githubusercontent.com/TorstenTimm/SelfCitationTextgenerator/master/executable/generate/generated_text.txt
+          sha256sum data/* > results/word_classes/source_sha256.txt
+      - name: Validate English noun/verb positive controls and score anonymous Voynich roles
+        run: python experiments/word_classes/english_pos_probe.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --naibbe data/naibbe.txt --generated data/timm.txt --out results/word_classes
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: english-pos-and-voynich-structural-roles
+          path: results/word_classes
+          retention-days: 30
+          if-no-files-found: warn
