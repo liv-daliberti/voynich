@@ -39,60 +39,56 @@ def resize_image(path,width=1024):
 
 
 def segment_lines(image,min_width=180,max_candidates=90):
-    """Locate thin handwritten rows; this is not a validated line detector."""
+    """Detect a handwriting line by peaks in SMALL COMPONENT centroids.
+
+    Previous row-run merging accepted illustrations/edges and discarded
+    most script because touching adjacent lines were merged. Here we
+    identify thin ink components and explicitly enforce line-spacing
+    before cropping. This still requires a manually checked sample.
+    """
+    from scipy.signal import find_peaks
     h,w=image.shape
-    # Trim non-content outer edges; source files often include borders.
-    margin=int(w*.06)
-    left=margin;right=w-margin
-    background=cv2.GaussianBlur(image,(0,0),sigmaX=17,sigmaY=17)
-    strength=(background.astype(np.float32)-image.astype(np.float32))
-    dark=(strength>14)&(image<205)
-    ink=np.uint8(dark)*255
-    count,components,stats,cent=cv2.connectedComponentsWithStats(ink,8)
-    # Reject big drawings, plant roots, and single specks.
-    strokes=np.zeros_like(ink)
-    for index in range(1,count):
-        x,y,cw,ch,area=(int(z) for z in stats[index])
-        if (left<=x<right and 2<=cw<=52 and 3<=ch<=39
-            and 7<=area<=500 and area/(cw*ch)>.09):
-            strokes[components==index]=255
-    density=(strokes[:,left:right]>0).sum(axis=1).astype(float)
-    smoothed=cv2.GaussianBlur(density.reshape(-1,1).astype(np.float32),
-                             (1,13),0).ravel()
-    valid=np.flatnonzero(smoothed>max(3,float(np.quantile(
-        smoothed,.65))*0.45))
-    peaks=[]
-    for value in valid:
-        if not peaks or value-peaks[-1][-1]>3:
-            peaks.append([int(value)])
-        else:peaks[-1].append(int(value))
-    # A text line may have ascenders / descenders across ~12-28 pixels.
-    merged=[]
-    for segment in peaks:
-        y1,y2=segment[0],segment[-1]
-        if merged and y1-merged[-1][1]<10:
-            merged[-1]=(merged[-1][0],y2)
-        else:merged.append((y1,y2))
-    results=[]
-    for low,high in merged[:max_candidates]:
-        line_h=high-low+1
-        if not 4<=line_h<=38:continue
-        y0=max(0,low-7);y1=min(h,high+9)
-        band=strokes[y0:y1,left:right]
-        xs=np.flatnonzero((band>0).sum(axis=0)>1)
-        if len(xs)<min_width//3:continue
-        x0=left+int(xs[0]);x1=left+int(xs[-1])+1
+    left,right=int(.085*w),int(.93*w)
+    background=cv2.GaussianBlur(image,(0,0),sigmaX=19,sigmaY=19)
+    contrast=(background.astype("float32")-image.astype("float32"))
+    mask=np.uint8((contrast>10)&(image<205))*255
+    n,labels,stats,cent=cv2.connectedComponentsWithStats(mask,8)
+    comps=[]
+    for i in range(1,n):
+        x,y,cw,ch,area=(int(v) for v in stats[i])
+        if (left<=x<right and 2<=cw<=30 and 5<=ch<=31
+            and 10<=area<=210 and area/(cw*ch)>=.12):
+            comps.append((x,y,cw,ch,area))
+    density=np.zeros(h,dtype=np.float32)
+    for x,y,cw,ch,area in comps:
+        center=int(y+ch/2)
+        if x<int(.70*w):
+            density[max(0,center-4):min(h,center+5)]+=1
+    smooth=cv2.GaussianBlur(density.reshape(-1,1),(1,9),0).ravel()
+    peaks,_=find_peaks(smooth,distance=max(22,int(h/55)),
+                       prominence=2,height=4)
+    result=[]
+    for center in peaks:
+        nearby=[(x,cw) for x,y,cw,ch,area in comps
+                if abs(y+ch/2-center)<13]
+        if len(nearby)<10:continue
+        x0=min(x for x,cw in nearby)
+        x1=max(x+cw for x,cw in nearby)
         if x1-x0<min_width:continue
-        x0=max(left,x0-7);x1=min(right,x1+7)
-        # Restrict text to <=80% page width only when writing extends that far.
+        # Stop before illustrations that often occupy the other half
+        # of the page; the extracted crop can be a script line fragment.
+        x0=max(left,x0-8)
+        x1=min(right,x1+8,x0+int(.72*w))
+        y0=max(0,int(center)-17)
+        y1=min(h,int(center)+19)
         crop=image[y0:y1,x0:x1]
-        if crop.size==0:continue
-        inkfrac=float((crop<155).mean())
-        if not .01<=inkfrac<=.33:continue
-        results.append({"bbox":[x0,y0,x1,y1],
-                        "ink_fraction":round(inkfrac,4),"image":crop})
-    # A page with zero text lines is an explicit failure, not empty success.
-    return sorted(results,key=lambda x:x["bbox"][1])
+        if not crop.size:continue
+        dark_fraction=float((crop<155).mean())
+        if not .008<=dark_fraction<=.39:continue
+        result.append({"bbox":[x0,y0,x1,y1],
+                       "ink_fraction":round(dark_fraction,4),
+                       "image":crop})
+    return sorted(result,key=lambda x:x["bbox"][1])
 
 
 def normalize_line(crop,height=64,width=256):
