@@ -53,7 +53,7 @@ def test_permutation_keeps_metadata_and_target_paired():
     for i in range(40):
         w=["cat","bat","rat","mat","sat","fat"] if i<20 else [
             "dog","fog","hog","bog","log","cog"]
-        pages.append(page(i,w))
+        pages.append(page(i,w+[f"tail{chr(97+i%26)}{chr(97+i//26)}"]))
     observed,rows=test_conditions(pages,False,"same_variety",repetitions=10)
     assert observed["A"]["preselected_pairs"]>=1
     result=permutation_null(pages,False,"same_variety",trials=10)
