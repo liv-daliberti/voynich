@@ -1,7 +1,7 @@
 """Paired held-out target and source-only ranking tests."""
 from experiments.same_target_source.evaluate import (
     precompute_source,score_identical_gold,matched_far_sources,
-    test_conditions,permutation_null,choose_source_pairs,
+    test_conditions as run_conditions,permutation_null,choose_source_pairs,
 )
 
 
@@ -54,7 +54,7 @@ def test_permutation_keeps_metadata_and_target_paired():
         w=["cat","bat","rat","mat","sat","fat"] if i<20 else [
             "dog","fog","hog","bog","log","cog"]
         pages.append(page(i,w+[f"tail{chr(97+i%26)}{chr(97+i//26)}"]))
-    observed,rows=test_conditions(pages,False,"same_variety",repetitions=10)
+    observed,rows=run_conditions(pages,False,"same_variety",repetitions=10)
     assert observed["A"]["preselected_pairs"]>=1
     result=permutation_null(pages,False,"same_variety",trials=10)
     assert result["A"]["trial_count"]==10
