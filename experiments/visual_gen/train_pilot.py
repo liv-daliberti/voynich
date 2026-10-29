@@ -292,7 +292,7 @@ def run(files,out,steps=120,side=32,K=40,seed=29,test_count=2):
         "train":len(train),"heldout":len(test),"steps":steps,
         "conditional_visual_js":stats["generated_visual_distribution"],
         "iid_visual_js":stats["iid_visual_distribution"],
-        "pseudo_script":stats["generated_pseudo_script"]},flush=True)
+        "pseudo_script":stats["generated_pseudo_script"]}),flush=True)
     return stats
 
 
