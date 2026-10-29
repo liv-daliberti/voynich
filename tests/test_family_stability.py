@@ -11,7 +11,7 @@ def page(i,words,quire="A",language="A"):
 
 def test_past_only_family_stability_and_future_gold_change():
     first=[
-        page(0,["cat","bat","hat","sat","rat"]),
+        page(0,["cat","bat","hat","sat","rat","mouse","fog"]),
         page(1,["cat","bat","hat","rat"]),
         page(2,["cat","bat","hat","mat"])]
     a=extract_events(first,False,lookback=4)
@@ -20,7 +20,7 @@ def test_past_only_family_stability_and_future_gold_change():
          e["target_index_in_quire"]==2][0]
     assert cat["new_neighbor_any"]==1
     later=[
-        page(0,["cat","bat","hat","sat","rat"]),
+        page(0,["cat","bat","hat","sat","rat","mouse","fog"]),
         page(1,["cat","bat","hat","rat"]),
         page(2,["cat","bat","hat","fat"])]
     other=[e for e in extract_events(later,False,lookback=4)
