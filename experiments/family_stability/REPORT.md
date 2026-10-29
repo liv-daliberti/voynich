@@ -66,6 +66,27 @@ These forms may be stable in some folios and reorganizing in others.
 Their raw novelty rates differ and confound frequency and candidate-pool
 size; do not infer causation or grammatical roles from the examples.
 
+## Sensitivity to how far back the family history is revealed
+
+Follow-up [successfully replicated source-data run](https://github.com/liv-daliberti/voynich/actions/runs/40810249071) changes only the available past *lookback* from 3 to 4 to 5 folio sides, always predicting the next page of the same quire. All candidate alphabets, neighborhood scores, and source features remain past-only.
+
+| History window | Currier A quire-heldout log loss gain (95% CI) | Currier B gain (95% CI) | A matched stable vs reorganizing delta | B matched delta |
+|---|---:|---:|---:|---:|
+| 3 preceding sides | -.002118 [-.005448,+.000026] | **+.002197** [+.001507,+.005882] | +.02963 (CI spans 0) | +.02817 (CI spans 0) |
+| 4 preceding sides | -.000861 [-.002452,+.000734] | **+.001746** [+.000816,+.006142] | +.01170 (CI spans 0) | +.02286 (CI spans 0) |
+| 5 preceding sides | -.001466 [-.003633,+.000028] | **+.001335** [+.000736,+.004194] | +.02591 (CI spans 0) | +.04136 [.00946,+.12320] |
+
+The B out-of-quire increment is **consistently positive, but tiny** under all three highly correlated history windows, while A's is negative. The 5-page B matched-pair interval excludes zero only in an **additional** sensitivity check, after multiple outcomes and settings were explored. This is not an independent confirmatory replication, and the 9 B quire clusters limit certainty. Treat thresholds, analysis choice and bootstrap interval selection as exploratory.
+
+## A concrete matched source-page comparison
+
+The target folio `f79v` in Currier B, quire M, contains two centers whose *source covariates* almost match:
+
+- `qotas` had token count 2, previous quire-prefix degree 6 and 253 eligible unobserved one-edit proposals. Its observed neighbors were exactly `{qotal,qotar}` on earlier folio `f77v` and immediately previous `f79r`. Therefore past stability = **1.0**. The next target contains an already-seen neighbor, but no newly formed family word under our rule.
+- `olkal` also had token count 2, degree 6 and 253 candidate proposals, but its earlier folio `f78v` neighbors were `{okal,oltal,sholkal}` and the immediately previous `f79r` contained `{olkl}`. Overlap = **0.0**. On target folio `f79v` it gains new-to-quire-prefix candidate `olkam`, while none of the immediately preceding active neighbors return.
+
+These are two real, source-only classified word families and the *same* target page; they illustrate why stability predicts reuse more naturally than innovation, and why an individual matched example cannot substitute for population-level statistical inference.
+
 ## Why this is important
 
 Stable families are more often associated with future occurrence of
