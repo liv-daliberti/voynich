@@ -65,6 +65,35 @@ neither sample looks like genuine handwriting.
 This is a negative **word-writing** result with a very limited image
 training set. It does NOT rule out a much larger MAGE/VQ-based system.
 
+## Image-only connected-component pseudo-language audit
+
+The [successful complete workflow](https://github.com/liv-daliberti/voynich/actions/runs/40815981570)
+uses a visual shape codebook of **24 unsupervised prototypes**, trained
+on **6,856 source-line connected components** only, and scores eight
+generated model lines plus eight IID code-sampled lines against the full
+66 heldout real lines. These prototypes are **not** EVA glyph labels:
+individual Voynich glyphs may break into several connected components
+or merge with adjacent marks.
+
+| Visual proxy (per line unless stated) | Heldout real | Generated | IID |
+|---|---:|---:|---:|
+| Connected ink components per line | **37.73** | 7.75 | 19.63 |
+| JS divergence of connected-component visual prototype distribution vs real | 0 | .14427 | **.10750** |
+| JS divergence of adjacent shape-prototype pairs vs real | 0 | **.10420** | .11665 |
+| Mean components per crude whitespace-delimited pseudo-group | 13.99 | 1.55 | 5.61 |
+
+The pseudo-group segmentation is **not** credible as a word segmentor:
+13.99 components per real pseudo-group is plainly a crude geometric
+aggregate, not a verified glyph/word length. Therefore its measured
+group statistics are diagnostic only and MUST NOT be treated as actual
+Voynich word-length or word-type distributions.
+
+The generated model severely underproduces connected ink components
+compared with the heldout scans, while the IID baseline produces more
+marks but disorganized shapes. This confirms the perceptual failure
+seen in the rendered line panels, notwithstanding some improvement in
+visual transition divergence.
+
 ## Recognition / true language-distribution test is BLOCKED
 
 `htr_alignment_gate.json` compares automatically detected candidate line
