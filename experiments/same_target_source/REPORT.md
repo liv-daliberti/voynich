@@ -4,7 +4,7 @@ October 28–29 2026. Follow-up to the cross-page and independent page-graph stu
 
 **Critical metadata correction:** The ZL3b `$I` field represents illustration/section, `$Q` quire, `$H` hand. The `$F` field represents a folio position within a quire, and had been misnamed `section_code` in older exploratory code. This report uses `$I` for all section matches and supersedes the prior erroneous section-matched source results.
 
-The [successful full-input source-data run](https://github.com/liv-daliberti/voynich/actions/runs/40805099037) used all 197 A/B paragraph-bearing folio sides, 120 whole-page permutations for each nested null, and frozen source SHA256. Source model and permutation tests passed. A follow-up **2,000-draw graph-only** quire-aware null is also being independently executed for higher-resolution p-values.
+The [successful full-input source-data run](https://github.com/liv-daliberti/voynich/actions/runs/40805099037) used all 197 A/B paragraph-bearing folio sides, 120 whole-page permutations for each nested null, and frozen source SHA256. Source model and permutation tests passed. A follow-up **2,000-draw graph-only** quire-aware null [completed successfully](https://github.com/liv-daliberti/voynich/actions/runs/40805379773) and supersedes the preliminary 120-draw graph p-values when the two differ.
 
 ## 1. Near-vs-far per-page word-graph similarity
 
@@ -21,6 +21,17 @@ Test statistic: mean pairwise word-type Jaccard at variety-local position gap 1�
 | Variety + section + quire + hand + source-size tertile | +.017571 | .2810 | +.034237 | .0165 |
 
 Interpretation: **much of the original nearby-folio advantage survives reordering WITHIN the same quires**. The observed near-far statistic is not evidence that fine-grained sequence order carries much information once quire block organization is held fixed. B retains a tiny apparent residual in the strictest null (~.00150), but p=.0165 from just 120 randomizations, amid many tested outcomes and stratum definitions; it is **not confirmatory**. The high-resolution 2,000-draw follow-up should be used for precise interpretation.
+
+### High-resolution 2,000-draw quire controls (primary graph interpretation)
+
+| Quire-aware permutation | A word-Jaccard excess (p) | B word-Jaccard excess (p) | B edge-Jaccard excess (p) | B degree-topology excess (p) |
+|---|---:|---:|---:|---:|
+| Variety + quire | +.001380 (.0650) | +.000792 (.2019) | +.001656 (.0920) | −.003196 (.8941) |
+| Variety + section + quire | +.001002 (.1409) | +.001176 (.0850) | +.002154 (.0320) | −.002619 (.9001) |
+| Variety + section + quire + hand | +.001027 (.1244) | +.001107 (.0950) | +.001875 (.0395) | −.002135 (.8541) |
+| Variety + section + quire + hand + source-size tertiles | +.000591 (.2534) | **+.001366 (.0510)** | +.002127 (.0245) | −.001748 (.8156) |
+
+**Interpretation revised:** The strictest B word-overlap p=.0510, not the .0165 from the first 120 draws. A previously observed strong nearby-graph-shape effect in B is entirely explained by quire/section/hand structure according to this null, with expected topology cosine near-minus-far HIGHER than the observed result (p=.816). The B edge overlap has a modest positive residual with an uncorrected one-sided p=.0245, amid multiple measures and shuffle designs; no strong confirmation is warranted. Exact permutation results are input- and design-conditional and no evidence of production order.
 
 The parallel **edge Jaccard** and degree-histogram topology effects:
 - Currier A edge near-far observed +.015857; strictest size-aware quire-null mean +.015279, p=.331.
