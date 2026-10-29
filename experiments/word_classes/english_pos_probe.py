@@ -179,8 +179,9 @@ def apply_probe(model,scaler,rows,reference):
     X=np.asarray([[row[k] for k in FEATURES] for row in rows],dtype=float)
     Z=scaler.transform(X)
     p=model.predict_proba(Z)[:,1]
-    reference_dist=np.sqrt(np.mean(np.square(scaler.transform(np.asarray(
-        [[r[k] for k in FEATURES] for r in reference])),axis=1))
+    reference_z=scaler.transform(np.asarray(
+        [[r[k] for k in FEATURES] for r in reference],dtype=float))
+    reference_dist=np.sqrt(np.mean(reference_z**2,axis=1))
     threshold=np.quantile(reference_dist,.95)
     deviation=np.sqrt(np.mean(Z**2,axis=1))
     enriched=[]
