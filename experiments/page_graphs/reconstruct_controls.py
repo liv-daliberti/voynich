@@ -240,7 +240,7 @@ def evaluate(name,pages,efa,output,trials=500,seed=20261028,shuffle_trials=500):
     return summary
 
 
-def run(zl,austen,naibbe,output,trials=500,shuffle_trials=500):
+def run(zl,austen,naibbe,output,trials=500,shuffle_trials=500,only=None):
     real=parse_voynich(Path(zl).read_text(encoding='utf-8-sig'))
     template={l:[p for p in real if p['language']==l] for l in ('A','B')}
     austen_words=clean_gutenberg(Path(austen).read_text(encoding='utf-8-sig'),'austen')
@@ -254,6 +254,7 @@ def run(zl,austen,naibbe,output,trials=500,shuffle_trials=500):
     out=Path(output);out.mkdir(parents=True,exist_ok=True)
     summaries={}
     for name,(pages,eva) in cohorts.items():
+        if only and name!=only: continue
         summaries[name]=evaluate(name,pages,eva,out/name,
                                  trials,seed=20261028,shuffle_trials=shuffle_trials)
     (out/'summary.json').write_text(json.dumps(
@@ -269,5 +270,6 @@ if __name__=='__main__':
     ap.add_argument('--out',default='results/page_reconstruction_controls')
     ap.add_argument('--masks',type=int,default=500)
     ap.add_argument('--page-shuffles',type=int,default=500)
+    ap.add_argument('--cohort',choices=['Voynich','Austen','Naibbe'])
     a=ap.parse_args()
-    run(a.zl,a.austen,a.naibbe,a.out,a.masks,a.page_shuffles)
+    run(a.zl,a.austen,a.naibbe,a.out,a.masks,a.page_shuffles,a.cohort)
