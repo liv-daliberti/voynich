@@ -1,0 +1,55 @@
+name: Contrastive patch generator of Voynich page images
+on:
+  workflow_dispatch:
+  push:
+    branches: [visual-patch-generative-pilot]
+    paths:
+      - experiments/visual_gen/**
+      - .github/workflows/voynich-visual-generation.yml
+      - tests/test_visual_patch_pilot.py
+jobs:
+  cpu-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install CPU training and computer vision dependencies
+        run: |
+          pip install 'numpy>=1.24,<3' pillow 'scikit-learn>=1.5,<2' opencv-python-headless torch
+      - name: Download actual Beinecke-derived folio images and fingerprint all sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data/visual_gen results/visual_gen
+          URL=https://raw.githubusercontent.com/d2kx/voynich-research/main/pages
+          # This is a small verified public GitHub image mirror. For full
+          # manuscript work switch to the authoritative Yale IIIF manifest.
+          for file in f1r_full.png f1v_full.png f16v_full_enh.png f17r_full.png f34r_full_enh.png f49v_full.png f57v_full_enh.png f58r_full.png f76r_full.png f78r_full.png f88r_full_enh.png; do
+            curl -fL --retry 3 -o data/visual_gen/${file} "${URL}/${file}"
+          done
+          sha256sum data/visual_gen/*.png > results/visual_gen/source_sha256.txt
+      - name: Train encoder with real contrastive loss then synthesize two image pages
+        run: |
+          python experiments/visual_gen/train_pilot.py \
+            --images \
+              data/visual_gen/f1r_full.png \
+              data/visual_gen/f1v_full.png \
+              data/visual_gen/f16v_full_enh.png \
+              data/visual_gen/f17r_full.png \
+              data/visual_gen/f34r_full_enh.png \
+              data/visual_gen/f49v_full.png \
+              data/visual_gen/f57v_full_enh.png \
+              data/visual_gen/f58r_full.png \
+              data/visual_gen/f76r_full.png \
+              data/visual_gen/f78r_full.png \
+              data/visual_gen/f88r_full_enh.png \
+            --steps 160 --codes 40 --patch 32 --out results/visual_gen
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-voynich-visual-pilot-generated-pages
+          path: results/visual_gen
+          retention-days: 30
+          if-no-files-found: warn
