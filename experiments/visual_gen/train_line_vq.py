@@ -53,6 +53,8 @@ class VQLine(nn.Module):
         recon=self.decoder(q)
         return recon,ids,commit,z
     def from_codes(self,ids):
+        ids=torch.as_tensor(ids,dtype=torch.long,
+                            device=self.codebook.weight.device)
         values=self.codebook(ids).permute(0,3,1,2)
         return self.decoder(values)
 
@@ -96,36 +98,85 @@ def nt_xent(features,temperature=.2):
 
 
 def train_vq(train,steps=360,seed=20261028,codes=96,batch_size=12):
+    """Continuous-autoencoder warmup avoids pathological VQ codebook collapse.
+
+    The previous no-warmup run used only 9 of 96 codes and generated
+    essentially blank lines. Now learn a real stroke decoder BEFORE
+    initializing VQ centroids from encoder feature vectors.
+    """
+    from sklearn.cluster import MiniBatchKMeans
     rng=np.random.default_rng(seed)
     torch.manual_seed(seed)
     model=VQLine(codes)
-    opt=torch.optim.AdamW(model.parameters(),lr=.001)
+    warmup_steps=140
+    opt=torch.optim.AdamW(model.parameters(),lr=.0007)
     log=[]
+    def losses(x,rec):
+        # Foreground occupies very little of a manuscript line.
+        # Heavy foreground reweighting prevents empty-page solutions.
+        pixel=F.binary_cross_entropy(rec,x,weight=1.+12.*x)
+        edge=F.l1_loss((rec[:,:,:,1:]-rec[:,:,:,:-1]).abs(),
+                       (x[:,:,:,1:]-x[:,:,:,:-1]).abs())
+        return pixel,edge
+    for step in range(warmup_steps):
+        idx=rng.choice(len(train),batch_size,
+                       replace=len(train)<batch_size)
+        x=train[idx]
+        z=model.encoder(x)
+        rec=model.decoder(z)
+        pixel,stroke=losses(x,rec)
+        aug=augment(x,rng)
+        ssl=nt_xent(torch.cat([z.mean((2,3)),
+                               model.encoder(aug).mean((2,3))]))
+        loss=pixel+.30*stroke+.025*ssl
+        opt.zero_grad(set_to_none=True);loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(),1.)
+        opt.step()
+        if step%35==0 or step==warmup_steps-1:
+            log.append({"phase":"decoder_warmup","step":step,
+                        "loss":round(float(loss.detach()),5),
+                        "pixel":round(float(pixel.detach()),5),
+                        "contrastive":round(float(ssl.detach()),5)})
+            print("WARM",log[-1],flush=True)
+    # Initialize codebook from actual latent activations; random near-zero
+    # code vectors previously attracted only the parchment/background.
+    with torch.no_grad():
+        pieces=[]
+        for i in range(0,len(train),20):
+            z=model.encoder(train[i:i+20])
+            pieces.append(z.permute(0,2,3,1).reshape(-1,model.dim))
+        features=torch.cat(pieces).cpu().numpy()
+    select=rng.choice(len(features),min(18000,len(features)),replace=False)
+    km=MiniBatchKMeans(n_clusters=codes,random_state=seed,batch_size=1024,
+                       max_iter=80,n_init=2)
+    km.fit(features[select])
+    with torch.no_grad():
+        model.codebook.weight.copy_(
+            torch.from_numpy(km.cluster_centers_).to(
+                model.codebook.weight.dtype))
+    opt=torch.optim.AdamW(model.parameters(),lr=.00025)
     for step in range(steps):
-        indices=rng.choice(len(train),size=batch_size,replace=len(train)<batch_size)
-        x=train[indices]
+        idx=rng.choice(len(train),batch_size,
+                       replace=len(train)<batch_size)
+        x=train[idx]
         rec,ids,commit,latent=model(x)
-        pixel=F.binary_cross_entropy(rec,x,weight=1.+3.*x)
-        # Encourage local high-frequency strokes without multiplying speckle.
-        dx=(rec[:,:,:,1:]-rec[:,:,:,:-1]).abs()
-        target_dx=(x[:,:,:,1:]-x[:,:,:,:-1]).abs()
-        stroke=F.l1_loss(dx,target_dx)
-        y=augment(x,rng)
-        z=model.encoder(y).mean((2,3))
-        z0=latent.mean((2,3))
-        ssl=nt_xent(torch.cat([z0,z],dim=0))
-        loss=pixel+.18*stroke+commit+.035*ssl
+        pixel,stroke=losses(x,rec)
+        aug=augment(x,rng)
+        ssl=nt_xent(torch.cat([
+            latent.mean((2,3)),
+            model.encoder(aug).mean((2,3))]))
+        loss=pixel+.30*stroke+.20*commit+.025*ssl
         opt.zero_grad(set_to_none=True);loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(),1.)
         opt.step()
         if step%40==0 or step==steps-1:
-            log.append({"step":step,
+            log.append({"phase":"vq_finetuning","step":step,
                 "loss":round(float(loss.detach()),5),
                 "pixel":round(float(pixel.detach()),5),
                 "stroke":round(float(stroke.detach()),5),
                 "vq":round(float(commit.detach()),5),
                 "contrastive":round(float(ssl.detach()),5),
-                "used_codes":int(ids.unique().numel())})
+                "minibatch_codes":int(ids.unique().numel())})
             print("VQ",log[-1],flush=True)
     model.eval()
     return model,log
