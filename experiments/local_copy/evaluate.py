@@ -107,7 +107,15 @@ def shuffled_folio(lines,seed):
     return [w for _,w in shuffle_within_group_position(flat,seed)]
 
 
-def run_corpus(sequences,eva,permutations=150,seed=20261028):
+
+def shuffled_line_order(lines,seed):
+    """Strong null for *vertical* proximity: retain all words and their
+    within-line positions/order, shuffle only physical line sequence."""
+    out=[list(line) for line in lines]
+    random.Random(seed).shuffle(out)
+    return out
+
+def run_corpus(sequences,eva,permutations=150,seed=20261028,null_mode='token'):
     pages=page_groups(sequences)
     neighbors=neighborhood_map(sequences,eva)
     actual={folio:measure_page(lines,neighbors) for folio,lines in pages.items()}
@@ -117,7 +125,9 @@ def run_corpus(sequences,eva,permutations=150,seed=20261028):
     for trial in range(permutations):
         simulated={}
         for index,(folio,lines) in enumerate(pages.items()):
-            new=shuffled_folio(lines,seed+trial*137+index)
+            new=(shuffled_line_order(lines,seed+trial*137+index)
+                 if null_mode=='line' else
+                 shuffled_folio(lines,seed+trial*137+index))
             simulated[folio]=measure_page(new,neighbors)
             for key,v in simulated[folio].items():
                 page_null[folio][key]+=v / permutations
@@ -175,11 +185,11 @@ def run_corpus(sequences,eva,permutations=150,seed=20261028):
                         (1+np.sum((null_left-null_right)>=actual_difference))/
                         (1+permutations)),5)}
     return {'pages':len(pages),'tokens':sum(len(line) for lines in pages.values() for line in lines),
-            'type_count':len(neighbors),'trials':permutations,
+            'type_count':len(neighbors),'trials':permutations,'null_mode':null_mode,
             'metrics':summary,'directional_contrasts':contrasts}
 
 
-def run(zl,austen,darwin,generated,out,permutations=150):
+def run(zl,austen,darwin,generated,out,permutations=150,null_mode='token'):
     z=Path(zl).read_text(encoding='utf-8-sig')
     corpora={'Voynich_A':(voynich_lines(z,'A'),True),
              'Voynich_B':(voynich_lines(z,'B'),True)}
@@ -192,7 +202,7 @@ def run(zl,austen,darwin,generated,out,permutations=150):
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     report={}
     for name,(seq,eva) in corpora.items():
-        result=run_corpus(seq,eva,permutations)
+        result=run_corpus(seq,eva,permutations,null_mode=null_mode)
         report[name]=result
         print(name,json.dumps({
             'pages':result['pages'],'tokens':result['tokens'],
@@ -211,6 +221,7 @@ if __name__=='__main__':
     p.add_argument('--darwin',required=True)
     p.add_argument('--generated')
     p.add_argument('--permutations',type=int,default=150)
+    p.add_argument('--null-mode',choices=['token','line'],default='token')
     p.add_argument('--out',default='results/local_copy')
     a=p.parse_args()
-    run(a.zl,a.austen,a.darwin,a.generated,a.out,a.permutations)
+    run(a.zl,a.austen,a.darwin,a.generated,a.out,a.permutations,a.null_mode)
