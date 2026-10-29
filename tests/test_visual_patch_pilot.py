@@ -1,5 +1,9 @@
 """Visual pilot sanity checks, no internet or manuscript data required."""
 from pathlib import Path
+import pytest
+pytest.importorskip('PIL')
+pytest.importorskip('cv2')
+pytest.importorskip('torch')
 import numpy as np
 from PIL import Image
 from experiments.visual_gen.train_pilot import (
