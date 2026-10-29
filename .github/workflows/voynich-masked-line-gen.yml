@@ -61,6 +61,13 @@ jobs:
             --dataset results/visual_line/line_images.npz \
             --out results/visual_line --vq-steps 280 \
             --mask-steps 160 --codes 96 --nlines 17
+      - name: Evaluate visual pseudo-symbol/word-gap distributions without claiming EVA OCR
+        run: |
+          python experiments/visual_gen/visual_symbol_audit.py \
+            --dataset results/visual_line/line_images.npz \
+            --generated results/visual_line/generated_line_montage.png \
+            --iid results/visual_line/iid_line_montage.png \
+            --out results/visual_line/visual_symbol_audit.json
       - name: Smoke tests with complete image dependencies
         run: python -m pytest -q tests/test_visual_line_masked.py
       - uses: actions/upload-artifact@v4
