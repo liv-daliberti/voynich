@@ -68,3 +68,26 @@ def test_english_tag_filter_excludes_ambiguous_or_not_noun_verb():
     ann=annotate(rows,counts)
     assert {x["word"]:x["noun_label"] for x in ann}=={
         "cat":1,"run":0}
+
+
+def test_fast_observed_form_index_matches_full_source_enumeration():
+    from experiments.persistence_innovation.graphs import tally
+    from experiments.english_controls.benchmark import character_edits
+    pages=[
+        pg(0,["cat","bat","hat","sat","rat","fat"]),
+        pg(1,["cat","bat","hat","mouse"]),
+        pg(2,["cat","bat","hat","mat"]),
+        pg(3,["cat","bat","hat","pat"]),
+    ]
+    vocab={w for p in pages for w in p["words"]}
+    abc=tuple(sorted({c for w in vocab for c in w}))
+    index={w:character_edits(w,abc)&vocab for w in vocab}
+    exact,edges,events,_=tally(pages,False)
+    fast,fast_edges,fast_events,_=tally(
+        pages,False,indexed_neighbors=index)
+    assert exact==fast
+    assert edges==fast_edges
+    assert sorted((e["center"],e["target"],e["edge_type"])
+                  for e in events)==sorted(
+                  (e["center"],e["target"],e["edge_type"])
+                  for e in fast_events)
