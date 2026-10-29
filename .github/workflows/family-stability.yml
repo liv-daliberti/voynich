@@ -1,0 +1,74 @@
+name: Stable versus reorganizing word families
+on:
+  workflow_dispatch:
+  push:
+    branches: [stable-reorganizing-families]
+    paths:
+      - experiments/family_stability/**
+      - tests/test_family_stability.py
+      - .github/workflows/family-stability.yml
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        cohort: [Voynich, Austen, Naibbe, Timm19, Timm29, Timm37]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -r requirements.txt
+      - name: Get input texts and pin fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data results/family_stability
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL --retry 3 -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL --retry 3 -o data/naibbe.txt https://raw.githubusercontent.com/greshko/naibbe-cipher/main/encrypted/nathist_output_ciphertext.txt
+          sha256sum data/ZL3b-n.txt data/1342-0.txt data/naibbe.txt > results/family_stability/source_sha256.txt
+      - name: Prepare original Java Timm generator
+        if: startsWith(matrix.cohort, 'Timm')
+        uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Produce authentic self-citation controls from pinned release
+        if: startsWith(matrix.cohort, 'Timm')
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/TorstenTimm/SelfCitationTextgenerator.git data/timm_upstream
+          git -C data/timm_upstream checkout --detach a6ede2202dd7ad6285ce2c007bf22c2a0e7709b7
+          cd data/timm_upstream/executable
+          COHORT="${{ matrix.cohort }}"; SEED="${COHORT#Timm}"
+          sed -i "s/^method.random.pseudo.seed=.*/method.random.pseudo.seed=${SEED}/" conf.properties
+          sed -i 's/^text.lines_to_create=.*/text.lines_to_create=5000/' conf.properties
+          java -jar text-generator.jar
+          test -s generate/generated_text.txt
+          cp generate/generated_text.txt ../../timm_generated.txt
+          cd ../../..
+          sha256sum data/timm_generated.txt data/timm_upstream/executable/conf.properties data/timm_upstream/executable/text-generator.jar >> results/family_stability/source_sha256.txt
+          git -C data/timm_upstream rev-parse HEAD >> results/family_stability/source_sha256.txt
+      - name: Evaluate prospective novel-family prediction with source-only histories
+        shell: bash
+        run: |
+          set -euo pipefail
+          C="${{ matrix.cohort }}"
+          case "${C}" in
+          Voynich)
+            python experiments/family_stability/predict.py --zl data/ZL3b-n.txt --mode Voynich --out results/family_stability/Voynich ;;
+          Austen)
+            python experiments/family_stability/predict.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --mode Austen --out results/family_stability/Austen ;;
+          Naibbe)
+            python experiments/family_stability/predict.py --zl data/ZL3b-n.txt --naibbe data/naibbe.txt --mode Naibbe --out results/family_stability/Naibbe ;;
+          *)
+            python experiments/family_stability/predict.py --zl data/ZL3b-n.txt --generated data/timm_generated.txt --mode Timm --out "results/family_stability/${C}" ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: family-stability-${{ matrix.cohort }}
+          path: results/family_stability/
+          retention-days: 30
+          if-no-files-found: warn
