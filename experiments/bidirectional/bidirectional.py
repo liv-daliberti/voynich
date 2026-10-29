@@ -314,7 +314,7 @@ def run(zl, austen, darwin, generated, out, max_lines=55,
             "backward_vs_shuffle_gain":round(
                 ms["backward"]["nll"]-m["backward"]["nll"],5),
             "both_vs_shuffle_gain":round(
-                ms["both"]["nll"]-m["both"]["nll"],5)},flush=True))
+                ms["both"]["nll"]-m["both"]["nll"],5)}),flush=True)
     (out/"summary.json").write_text(json.dumps(report,indent=2)+"\n")
     return report
 
