@@ -1,0 +1,78 @@
+name: Fixed-target matched source page test
+on:
+  workflow_dispatch:
+  push:
+    branches: [same-target-source-conditioning]
+    paths:
+      - experiments/same_target_source/**
+      - tests/test_same_target_source.py
+      - .github/workflows/same-target-source.yml
+jobs:
+  replicate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 29
+    strategy:
+      fail-fast: false
+      matrix:
+        cohort: [voynich, austen, naibbe, timm19, timm23, timm29, timm31, timm37]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Fetch original source texts and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data results/same_target_source
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL --retry 3 -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL --retry 3 -o data/naibbe.txt https://raw.githubusercontent.com/greshko/naibbe-cipher/main/encrypted/nathist_output_ciphertext.txt
+          sha256sum data/ZL3b-n.txt data/1342-0.txt data/naibbe.txt > results/same_target_source/source_sha256.txt
+      - name: Prepare released Java generator
+        if: startsWith(matrix.cohort, 'timm')
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Reproduce fresh authentic self-citation text
+        if: startsWith(matrix.cohort, 'timm')
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/TorstenTimm/SelfCitationTextgenerator.git data/timm_upstream
+          git -C data/timm_upstream checkout --detach a6ede2202dd7ad6285ce2c007bf22c2a0e7709b7
+          cd data/timm_upstream/executable
+          SEED="${{ matrix.cohort }}"; SEED="${SEED#timm}"
+          sed -i "s/^method.random.pseudo.seed=.*/method.random.pseudo.seed=${SEED}/" conf.properties
+          sed -i 's/^text.lines_to_create=.*/text.lines_to_create=5000/' conf.properties
+          java -jar text-generator.jar
+          test -s generate/generated_text.txt
+          cp generate/generated_text.txt ../../timm_generated.txt
+          cd ../../..
+          sha256sum data/timm_generated.txt data/timm_upstream/executable/conf.properties data/timm_upstream/executable/text-generator.jar >> results/same_target_source/source_sha256.txt
+          git -C data/timm_upstream rev-parse HEAD >> results/same_target_source/source_sha256.txt
+          cp data/timm_upstream/executable/conf.properties results/same_target_source/generator_config.properties
+      - name: Paired same-target near versus distant source with constrained page shuffles
+        shell: bash
+        run: |
+          set -euo pipefail
+          COHORT="${{ matrix.cohort }}"
+          if [[ "${COHORT}" == "voynich" ]]; then
+            python experiments/same_target_source/evaluate.py --zl data/ZL3b-n.txt --mode voynich --shuffles 120 --out results/same_target_source/voynich.json
+          elif [[ "${COHORT}" == "austen" ]]; then
+            python experiments/same_target_source/evaluate.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --mode austen --shuffles 80 --out results/same_target_source/austen.json
+          elif [[ "${COHORT}" == "naibbe" ]]; then
+            python experiments/same_target_source/evaluate.py --zl data/ZL3b-n.txt --naibbe data/naibbe.txt --mode naibbe --shuffles 80 --out results/same_target_source/naibbe.json
+          else
+            python experiments/same_target_source/evaluate.py --zl data/ZL3b-n.txt --generated data/timm_generated.txt --mode timm --shuffles 80 --out "results/same_target_source/${COHORT}.json"
+            python experiments/same_target_source/evaluate.py --zl data/ZL3b-n.txt --generated data/timm_generated.txt --mode timm --native --shuffles 60 --out "results/same_target_source/${COHORT}_native.json"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fixed-target-source-${{ matrix.cohort }}
+          path: results/same_target_source
+          retention-days: 30
+          if-no-files-found: warn
