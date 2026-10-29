@@ -75,9 +75,13 @@ jobs:
           sha256sum data/* > results/local_copy/source_sha256.txt
       - name: Physical prior horizontal and vertical source exposure
         run: python experiments/local_copy/evaluate.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --permutations 150 --out results/local_copy
+      - name: Stronger vertical null preserving entire line content
+        run: python experiments/local_copy/evaluate.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --permutations 120 --null-mode line --out results/local_copy_line_order
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: local-copy-positional-null
-          path: results/local_copy
+          path: |
+            results/local_copy
+            results/local_copy_line_order
           retention-days: 30
