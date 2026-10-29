@@ -62,3 +62,14 @@ def test_small_real_source_and_graph_null_finite():
     assert outcome["nulls"]["currier"]["graph"]["A"]["word_jaccard"]["n_valid_permutations"]==3
     strict=outcome["nulls"]["currier_section_quire_hand"]
     assert strict["permutation_mobility"]["movable_pages"]==26
+
+
+def test_canonical_page_parser_uses_illustration_category_for_section():
+    from experiments.page_graphs.compare import parse_voynich
+    text=('<f1r> <! $Q=A $P=A $F=a $I=H $L=A $H=1>\n'
+          '<f1r.1,+P0> chol.or.daiin\n')
+    parsed=parse_voynich(text)
+    assert len(parsed)==1
+    assert parsed[0]['section_code']=='H'
+    assert parsed[0]['quire_code']=='A'
+    assert parsed[0]['folio_slot_code']=='a'
