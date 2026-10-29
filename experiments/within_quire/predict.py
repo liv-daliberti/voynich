@@ -202,6 +202,13 @@ def analyze(pages,eva,trials=300,seed=20261028):
         observed=evaluate_order(pages,models,graph,original,strict)
         report={"observed":{metric:block_bootstrap(observed,metric)
                              for metric in OUTCOMES},
+                "by_currier_variety":{
+                    lang:{"matched_targets":sum(
+                        r["language"]==lang for r in observed),
+                          "metrics":{metric:block_bootstrap([
+                              r for r in observed if r["language"]==lang],
+                              metric) for metric in OUTCOMES}}
+                    for lang in ("A","B")},
                 "matched_targets":len(observed),
                 "per_target_rows":observed[:30],
                 "nulls":{}}
@@ -216,6 +223,10 @@ def analyze(pages,eva,trials=300,seed=20261028):
                 targets.append(len(trialrows))
                 for field in OUTCOMES:
                     draws[field].append(group_stats(trialrows,field))
+                    for lang in ("A","B"):
+                        draws[lang,field].append(group_stats([
+                            r for r in trialrows if r["language"]==lang],
+                            field))
             x={"strata":list(keys),
                "n_strata":len(strata(pages,keys)),
                "mean_moved_pages":round(float(np.mean(moved)),2),
@@ -236,6 +247,25 @@ def analyze(pages,eva,trials=300,seed=20261028):
                     "p_one_sided":round(float(
                         (1+np.sum(v>=actual))/(len(v)+1)),6),
                     "valid_permutations":len(v)}
+            x["by_currier_variety"]={}
+            for lang in ("A","B"):
+                lx={}
+                for field in ("chance_adjusted_recall","word_jaccard",
+                              "rank_percentile"):
+                    actual=report["by_currier_variety"][lang]["metrics"][field]["value"]
+                    values=np.asarray([v for v in draws[lang,field]
+                                       if v is not None],float)
+                    if actual is None or not len(values):
+                        lx[field]={"available":False}
+                    else:
+                        lx[field]={
+                            "observed":actual,
+                            "null_mean":round(float(values.mean()),6),
+                            "excess":round(float(actual-values.mean()),6),
+                            "p_one_sided":round(float(
+                                (1+np.sum(values>=actual))/(len(values)+1)),6),
+                            "permutations":len(values)}
+                x["by_currier_variety"][lang]=lx
             report["nulls"][strat_name]=x
         result[label]=report
         for name,r in report["observed"].items():
