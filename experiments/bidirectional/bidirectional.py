@@ -117,6 +117,7 @@ def evaluate(fwd, bwd, heldout, max_lines=55, seed=20261028,
     aggregation=defaultdict(lambda: defaultdict(float))
     fixed=defaultdict(lambda: defaultdict(float))
     examples=[]
+    line_losses=[]
     seen=0
     total=0
 
@@ -128,6 +129,8 @@ def evaluate(fwd, bwd, heldout, max_lines=55, seed=20261028,
         r["entropy"]+=entropy(dist)
 
     for group,line in selected:
+        losses={"group":group,"tokens":len(line),
+                "forward":0.,"backward":0.,"both":0.}
         rev=list(reversed(line))
         n=len(line)
         for i,truth in enumerate(line):
@@ -141,6 +144,8 @@ def evaluate(fwd, bwd, heldout, max_lines=55, seed=20261028,
             region=bins(i,n)
             for label,d in (("forward",pf),("backward",pb),("both",pbi)):
                 add("all",label,d,tid)
+                add("all_"+("seen" if tid else "unknown"),label,d,tid)
+                losses[label]+=nll(d,tid)
                 add("region:"+region,label,d,tid)
                 add("from_start:"+str(min(i,9)),label,d,tid)
                 add("from_end:"+str(min(n-1-i,9)),label,d,tid)
@@ -179,6 +184,7 @@ def evaluate(fwd, bwd, heldout, max_lines=55, seed=20261028,
                         examples.append({"group":group,"line":line,
                           "target_index":i,"target_word":truth,"direction":direction,
                           "predictions":samples})
+        line_losses.append(losses)
     summary={}
     for (region,label),value in sorted(aggregation.items()):
         nn=value["n"]
@@ -197,7 +203,54 @@ def evaluate(fwd, bwd, heldout, max_lines=55, seed=20261028,
         "selected_lines":len(selected),"evaluated_positions":total,
         "target_seen_rate":round(seen/total,6) if total else None,
         "metrics":summary,"fixed_target_reveal_curves":curves,
-        "example_traces":examples}
+        "example_traces":examples,
+        "per_line_losses":line_losses}
+
+
+
+def paired_cluster_bootstrap(real_lines, shuffled_lines,
+                             seed=20261028, reps=700):
+    """Resample folios/pseudoblocks, respecting within-group dependence.
+
+    Positive backward_minus_forward means the forward model performs better.
+    Positive real_vs_shuffle means real order improves log likelihood.
+    """
+    if len(real_lines) != len(shuffled_lines):
+        raise ValueError("Unpaired evaluation lines")
+    groups=defaultdict(list)
+    for a,b in zip(real_lines,shuffled_lines):
+        if a["group"] != b["group"] or a["tokens"] != b["tokens"]:
+            raise ValueError("Real/shuffle evaluation mismatch")
+        groups[a["group"]].append((a,b))
+    labels=sorted(groups)
+    rng=np.random.default_rng(seed)
+    metrics=("backward_minus_forward",
+             "real_vs_shuffle_forward",
+             "real_vs_shuffle_backward",
+             "real_vs_shuffle_both")
+    def calculate(draw):
+        total=sum(a["tokens"] for key in draw for a,_ in groups[key])
+        if not total:
+            return {k:None for k in metrics}
+        return {
+            "backward_minus_forward":sum(
+                a["backward"]-a["forward"] for key in draw
+                for a,_ in groups[key])/total,
+            **{f"real_vs_shuffle_{k}":sum(
+                b[k]-a[k] for key in draw for a,b in groups[key])/total
+               for k in ("forward","backward","both")}}
+    point=calculate(labels)
+    trials={key:[] for key in metrics}
+    for _ in range(reps):
+        draw=rng.choice(labels,size=len(labels),replace=True)
+        v=calculate(draw)
+        for key in metrics:
+            trials[key].append(v[key])
+    return {"clusters":len(labels),"resamples":reps,
+            "estimates":{key:{"point":round(point[key],6),
+                              "ci95":[round(float(np.quantile(trials[key],q)),6)
+                                      for q in (.025,.975)]}
+                         for key in metrics}}
 
 
 def run(zl, austen, darwin, generated, out, max_lines=55,
@@ -228,7 +281,10 @@ def run(zl, austen, darwin, generated, out, max_lines=55,
                       WordLattice(backwards(control),max_vocab,ab),
                       test,max_lines,fusion_strength=strength,
                       include_traces=False)
+        uncertainty=paired_cluster_bootstrap(
+            real["per_line_losses"],null["per_line_losses"])
         report[name]={
+            "uncertainty":uncertainty,
             "train_tokens":sum(len(line) for _,line in train),
             "heldout_tokens":sum(len(line) for _,line in test),
             "model_vocab":max_vocab+1,
