@@ -24,6 +24,7 @@ from experiments.cross_page.reconstruct import generated_words
 from experiments.english_controls.benchmark import clean_gutenberg,character_edits
 from experiments.page_graphs.reconstruct_controls import matched_pages
 from experiments.robustness75.robustness import glyphs,one_edit_forms
+from experiments.page_graphs.compare import build_adjacency
 
 
 def get_cohort(zl,cohort="Voynich",austen=None,naibbe=None,generated=None):
@@ -61,8 +62,16 @@ def propose(word,alphabet,eva):
             character_edits(word,tuple(alphabet)))-{word})
 
 
-def tally(pages,eva,order=None,record_edges=True):
-    """All target outcome observations excluded from source candidate choice."""
+def tally(pages,eva,order=None,record_edges=True,indexed_neighbors=None):
+    """All target outcome observations excluded from source candidate choice.
+
+    indexed_neighbors is an optional GLOBAL index of *observed* one-edit
+    matches, used only to speed intersection with actual target words.
+    Any newly introduced target glyph still must belong to the source-only
+    prefix alphabet. This indexing cannot invent or make an edit eligible.
+    Candidate-pool size for original ordered pages is still calculated
+    from entirely source-only proposals and is ignored in shuffled nulls.
+    """
     if order is None:order=np.arange(len(pages),dtype=int)
     order_groups=by_quire([pages[int(i)] for i in order])
     counters=defaultdict(Counter)
@@ -87,13 +96,29 @@ def tally(pages,eva,order=None,record_edges=True):
             distinct_new_sources=defaultdict(set)
             actual_innovations=set()
             cache={}
+            novel_on_target=current-seen
+            stable_on_target=previous & current
+            allowed=set(alphabet)
             for center in previous:
-                if center not in cache:cache[center]=propose(center,tuple(alphabet),eva)
-                family=cache[center]
-                # Distinct candidate word family, not one edge for each token.
-                persistence=family & previous & current
-                innovations=family & (current-seen)
-                possible+=len(family-seen)
+                if indexed_neighbors is None:
+                    if center not in cache:
+                        cache[center]=propose(center,tuple(alphabet),eva)
+                    family=cache[center]
+                    persistence=family & stable_on_target
+                    innovations=family & novel_on_target
+                    if record_edges:
+                        possible+=len(family-seen)
+                else:
+                    # Every target comparison uses an exact one-glyph edge
+                    # in the corpus-wide INDEX, but source-only alphabet is
+                    # checked before an innovation qualifies.
+                    matched=indexed_neighbors[center]
+                    persistence=matched & stable_on_target
+                    innovations={word for word in (matched & novel_on_target)
+                                 if all(g in allowed for g in
+                                        (glyphs(word) if eva else tuple(word)))}
+                    if record_edges:
+                        possible+=len(propose(center,tuple(alphabet),eva)-seen)
                 retained+=len(persistence)
                 novel+=len(innovations)
                 for word in persistence:
@@ -177,12 +202,24 @@ def null_order(pages,rng):
 
 
 def evaluate(pages,eva,permutations=50,seed=20261028):
-    observed,edges,instances,steps=tally(pages,eva)
+    # Full observed vocabulary is ONLY an intersection index; possible
+    # innovations are still filtered by prior-quire alphabet. This is
+    # equivalent to source-only enumeration for observed edge outcomes.
+    if eva:
+        indexed=build_adjacency(pages)
+    else:
+        all_types={w for p in pages for w in p["words"]}
+        alphabet=tuple(sorted({c for w in all_types for c in w}))
+        indexed={w:character_edits(w,alphabet)&all_types
+                 for w in all_types}
+    observed,edges,instances,steps=tally(
+        pages,eva,indexed_neighbors=indexed)
     rng=np.random.default_rng(seed)
     measurements=defaultdict(list)
     for _ in range(permutations):
         order=null_order(pages,rng)
-        trial,_,_,_=tally(pages,eva,order,record_edges=False)
+        trial,_,_,_=tally(pages,eva,order,record_edges=False,
+                          indexed_neighbors=indexed)
         for lang,stats in trial.items():
             for m in ("mean_persistence_edges_per_source_type",
                       "mean_innovation_edges_per_source_type",
