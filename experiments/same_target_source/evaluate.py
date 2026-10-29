@@ -313,9 +313,33 @@ def run(pages,eva,out,name="Voynich",shuffles=100):
     return result
 
 
+def apply_correct_zl_metadata(pages, raw_text):
+    """ZL header convention: $Q quire, $I illustration/section,
+    $H hand, $F folio position WITHIN the quire, NOT section.
+
+    Previous exploratory models using `section_code=$F` need to be
+    treated as mis-stratified; this run explicitly corrects them.
+    """
+    meta={}
+    for line in raw_text.splitlines():
+        row=re.match(r'^<([^.,>]+)>\\s*<!\\s*(.*?)>',line)
+        if not row:
+            continue
+        attrs=dict(re.findall(r'\\$([A-Z])=([^\\s>]+)',row.group(2)))
+        meta[row.group(1)]=attrs
+    for page in pages:
+        p=meta.get(page["folio"],{})
+        page["section_code"]=p.get("I","?")
+        page["quire_code"]=p.get("Q","?")
+        page["hand_code"]=p.get("H","?")
+        page["folio_slot_code"]=p.get("F","?")
+    return pages
+
+
 def get_pages(zl,mode,austen=None,naibbe=None,generated=None,
               native=False):
-    p=parse_voynich(Path(zl).read_text(encoding="utf-8-sig"))
+    raw_zl=Path(zl).read_text(encoding="utf-8-sig")
+    p=apply_correct_zl_metadata(parse_voynich(raw_zl),raw_zl)
     if mode=="voynich":return p,True
     if mode=="austen":
         words=clean_gutenberg(Path(austen).read_text(encoding="utf-8-sig"),
