@@ -139,7 +139,7 @@ def ordered_diagnostics(arrays,ids,lags=LAGS,randomizations=300,seed=20261028,
                     shuffled=ii.copy()
                     labels=[all_pages[k]["language"] for k in ii]
                     for lang in ("A","B"):
-                        slots=np.asarray([z for z,x in enumerate(labels) if x==lang])
+                        slots=np.asarray([z for z,x in enumerate(labels) if x==lang],dtype=int)
                         shuffled[slots]=rng.permutation(shuffled[slots])
                 else:
                     shuffled=rng.permutation(ii)
