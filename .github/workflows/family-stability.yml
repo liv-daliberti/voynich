@@ -57,7 +57,9 @@ jobs:
           C="${{ matrix.cohort }}"
           case "${C}" in
           Voynich)
-            python experiments/family_stability/predict.py --zl data/ZL3b-n.txt --mode Voynich --out results/family_stability/Voynich ;;
+            python experiments/family_stability/predict.py --zl data/ZL3b-n.txt --mode Voynich --lookback 4 --out results/family_stability/Voynich
+            python experiments/family_stability/predict.py --zl data/ZL3b-n.txt --mode Voynich --lookback 3 --out results/family_stability/Voynich_lb3
+            python experiments/family_stability/predict.py --zl data/ZL3b-n.txt --mode Voynich --lookback 5 --out results/family_stability/Voynich_lb5 ;;
           Austen)
             python experiments/family_stability/predict.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --mode Austen --out results/family_stability/Austen ;;
           Naibbe)
