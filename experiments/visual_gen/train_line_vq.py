@@ -114,7 +114,7 @@ def train_vq(train,steps=360,seed=20261028,codes=96,batch_size=12):
     def losses(x,rec):
         # Foreground occupies very little of a manuscript line.
         # Heavy foreground reweighting prevents empty-page solutions.
-        pixel=F.binary_cross_entropy(rec,x,weight=1.+12.*x)
+        pixel=F.binary_cross_entropy(rec,x,weight=1.+35.*x)
         edge=F.l1_loss((rec[:,:,:,1:]-rec[:,:,:,:-1]).abs(),
                        (x[:,:,:,1:]-x[:,:,:,:-1]).abs())
         return pixel,edge
@@ -363,6 +363,7 @@ def run(dataset,out,vq_steps=360,mask_steps=220,seed=20261028,
     result=evaluate(model,transformer,train,test,ids,
                     torch.cat(samples),torch.cat(iid))
     result.update({
+        "preprocessing":"locally binarized ink with raw grayscale crops retained",
         "vq_train_steps":vq_steps,"masked_transformer_steps":mask_steps,
         "n_source_train_lines":len(train),"n_source_test_lines":len(test),
         "generated_line_count":nlines,
