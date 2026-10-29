@@ -15,6 +15,8 @@ from __future__ import annotations
 import argparse, json, re
 from collections import defaultdict
 from pathlib import Path
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from experiments.context.slot_filling import voynich_lines
 
 
