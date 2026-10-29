@@ -322,10 +322,10 @@ def apply_correct_zl_metadata(pages, raw_text):
     """
     meta={}
     for line in raw_text.splitlines():
-        row=re.match(r'^<([^.,>]+)>\\s*<!\\s*(.*?)>',line)
+        row=re.match(r'^<([^.,>]+)>\s*<!\s*(.*?)>',line)
         if not row:
             continue
-        attrs=dict(re.findall(r'\\$([A-Z])=([^\\s>]+)',row.group(2)))
+        attrs=dict(re.findall(r'\$([A-Z])=([^\s>]+)',row.group(2)))
         meta[row.group(1)]=attrs
     for page in pages:
         p=meta.get(page["folio"],{})
