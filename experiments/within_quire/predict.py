@@ -23,6 +23,7 @@ MODES={
     "within_quire":("language","quire_code"),
     "within_quire_section":("language","quire_code","section_code"),
     "within_quire_section_hand":("language","quire_code","section_code","hand_code"),
+    "within_quire_section_hand_size":("language","quire_code","section_code","hand_code","size_bin"),
 }
 OUTCOMES=("target_recall","chance_adjusted_recall","candidate_coverage",
           "rank_percentile","word_jaccard","edge_jaccard","degree_cosine")
@@ -48,9 +49,20 @@ def get_controls(zl,austen=None,generated=None,cohort="Voynich"):
 
 def strata(pages,keys):
     groups=defaultdict(list)
+    meta=[k for k in keys if k!="size_bin"]
     for idx,p in enumerate(pages):
-        groups[tuple(p.get(k,"?") for k in keys)].append(idx)
-    return groups
+        groups[tuple(p.get(k,"?") for k in meta)].append(idx)
+    if "size_bin" not in keys:
+        return groups
+    matched=defaultdict(list)
+    for category,ids in groups.items():
+        if len(ids)<6:
+            matched[category+("all",)].extend(ids)
+        else:
+            ranked=sorted(ids,key=lambda i:(len(set(pages[i]["words"])),i))
+            for j,idx in enumerate(ranked):
+                matched[category+(min(2,(3*j)//len(ranked)),)].append(idx)
+    return matched
 
 
 def permute(pages,keys,rng):
