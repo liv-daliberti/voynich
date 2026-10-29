@@ -42,6 +42,22 @@ def generated_words(text):
     return lines
 
 
+def native_generated_pages(text, lines_per_page=29):
+    """Keep original Java generator line breaks and published page size."""
+    lines=[]
+    for raw in text.splitlines():
+        raw=raw.strip()
+        if not raw or raw.startswith("#"):continue
+        words=re.findall(r"[a-z]+",raw.lower())
+        if words:lines.append(words)
+    pages=[]
+    for first in range(0,len(lines),lines_per_page):
+        content=[w for line in lines[first:first+lines_per_page] for w in line]
+        pages.append({"folio":f"native_{first//lines_per_page:04d}",
+                      "language":"G","words":content})
+    return pages
+
+
 def source_model(page, eva=True, top_k=50, min_support=2):
     """No target-page words, alphabet, or outcomes are used."""
     forms = set(page["words"])
@@ -101,7 +117,7 @@ def score_matrices(pages,eva=True,top_k=50,min_support=2):
 
 def group_indices(pages):
     groups={"physical_all":list(range(len(pages)))}
-    for l in ("A","B"):
+    for l in sorted({p["language"] for p in pages}):
         ids=[i for i,p in enumerate(pages) if p["language"]==l]
         if ids:groups[l]=ids
     return groups
@@ -138,8 +154,9 @@ def ordered_diagnostics(arrays,ids,lags=LAGS,randomizations=300,seed=20261028,
                 if fixed_language_permutation:
                     shuffled=ii.copy()
                     labels=[all_pages[k]["language"] for k in ii]
-                    for lang in ("A","B"):
-                        slots=np.asarray([z for z,x in enumerate(labels) if x==lang],dtype=int)
+                    for lang in set(labels):
+                        slots=np.asarray([z for z,x in enumerate(labels)
+                                          if x==lang],dtype=int)
                         shuffled[slots]=rng.permutation(shuffled[slots])
                 else:
                     shuffled=rng.permutation(ii)
@@ -253,6 +270,15 @@ def run(zl,out,mode="voynich",austen=None,naibbe=None,
     pages,eva=load_cohort(zl,austen,naibbe,generated,mode)
     summary=run_pages(pages,eva,top_k=top_k,shuffles=shuffles,name=mode)
     summary["seed"]=seed
+    if mode=="timm":
+        raw=Path(generated).read_text(encoding="utf-8-sig")
+        native=native_generated_pages(raw,lines_per_page=29)
+        summary["native_generator_page_sensitivity"]=run_pages(
+            native,True,top_k=top_k,shuffles=shuffles,
+            name="timm_native_lines_per_page_29")
+        print("timm native",seed,"pages",len(native),
+              "lag1",summary["native_generator_page_sensitivity"]["groups"]["G"]
+                    ["lag_decay"]["1"]["forward"]["mean_novel_recall"],flush=True)
     summary["source_sha256"]={
        "zl":hashlib.sha256(Path(zl).read_bytes()).hexdigest()}
     for label,file in (("austen",austen),("naibbe",naibbe),
