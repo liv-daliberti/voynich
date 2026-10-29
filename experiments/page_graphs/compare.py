@@ -28,9 +28,10 @@ def parse_voynich(text):
         metadata[m.group(1)]=fields
     for p in base:
         fields=metadata.get(p['folio'],{})
-        p['section_code']=fields.get('F','?')
+        p['section_code']=fields.get('I','?')  # Illustration/section
         p['hand_code']=fields.get('H','?')
         p['quire_code']=fields.get('Q','?')
+        p['folio_slot_code']=fields.get('F','?')  # Folio position within quire
     return base
 
 
