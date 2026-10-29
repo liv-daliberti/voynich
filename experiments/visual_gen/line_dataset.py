@@ -91,9 +91,19 @@ def segment_lines(image,min_width=180,max_candidates=90):
     return sorted(result,key=lambda x:x["bbox"][1])
 
 
-def normalize_line(crop,height=64,width=256):
-    """Preserve aspect ratio with padding instead of stretching glyph widths."""
+def normalize_line(crop,height=64,width=256,binarize=True):
+    """Whiten parchment locally to force stroke, not background, generation.
+
+    Otsu and grayscale caused the first models to learn a dark parchment
+    stripe instead of glyph strokes. This explicitly uses a locally
+    thresholded script image. Preserve the raw original separately.
+    """
     h,w=crop.shape
+    if binarize:
+        # Remove large soft vellum gradients and preserve thin pen strokes.
+        crop=cv2.adaptiveThreshold(
+            crop,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,15,5)
     factor=min((height-8)/h,(width-8)/w)
     out_w=max(1,min(width-8,int(round(w*factor))))
     out_h=max(1,min(height-8,int(round(h*factor))))
@@ -108,7 +118,7 @@ def build(sources,zl_path,out,heldout_quires=("M","O"),max_lines_per_page=24):
     files=[Path(p) for p in sources]
     lookup=read_quire_lookup(Path(zl_path).read_text(encoding="utf-8-sig"))
     dest=Path(out);dest.mkdir(parents=True,exist_ok=True)
-    images=[];source_rows=[]
+    images=[];raw_images=[];source_rows=[]
     held=set(heldout_quires)
     for path in files:
         folio=folio_from_path(path)
@@ -117,8 +127,10 @@ def build(sources,zl_path,out,heldout_quires=("M","O"),max_lines_per_page=24):
         image=resize_image(path)
         lines=segment_lines(image)[:max_lines_per_page]
         for idx,rec in enumerate(lines):
-            normalized=normalize_line(rec["image"])
+            normalized=normalize_line(rec["image"],binarize=True)
+            raw=normalize_line(rec["image"],binarize=False)
             images.append(normalized)
+            raw_images.append(raw)
             source_rows.append({
                 "filename":str(path),"folio":folio,"quire":quire,
                 "split":subset,"bbox":rec["bbox"],"ink_fraction":rec["ink_fraction"],
@@ -133,12 +145,16 @@ def build(sources,zl_path,out,heldout_quires=("M","O"),max_lines_per_page=24):
     assert not ({r["quire"] for r in source_rows if r["split"]=="train"}&
                 {r["quire"] for r in source_rows if r["split"]=="test"})
     data=np.stack(images)
+    raw=np.stack(raw_images)
     np.savez_compressed(dest/"line_images.npz",
-                        train=data[train],test=data[test])
+                        train=data[train],test=data[test],
+                        train_original=raw[train],test_original=raw[test])
     (dest/"line_manifest.json").write_text(json.dumps({
         "rows":source_rows,"train_lines":len(train),"test_lines":len(test),
         "heldout_quires":list(heldout_quires),
-        "method":"heuristic connected-components, not manually verified"},
+        "method":"heuristic connected-components, not manually verified",
+        "model_input":"adaptive local binarized ink; originals retained alongside",
+        "raw_crop_images_retained":True},
         indent=2)+"\n")
     for split,idxs in (("train",train),("test",test)):
         tile=np.concatenate([data[i] for i in idxs[:min(24,len(idxs))]])
