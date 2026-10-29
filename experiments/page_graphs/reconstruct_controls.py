@@ -62,10 +62,15 @@ def reconstruct_page(page,efa,trials=500,topk=50,seed=20261028):
     retained=max(1,round(n*.25))
     rng=np.random.default_rng(seed)
     ids=np.asarray([lookup.get(w,-1) for w in observed],dtype=int)
-    num_proposals=len(lookup)
-    indices=np.fromiter(lookup.values(),dtype=np.int32,count=num_proposals)
-    # The row-map array is used only for recording the true deleted words;
-    # it NEVER influences scores or candidate eligibility.
+    # True full-page edges are used only for EVALUATION, never prediction.
+    reverse_row={int(ids[j]):j for j in range(n) if ids[j]>=0}
+    rr,cc=incidence.nonzero()
+    full_edges=np.asarray(sorted({
+        tuple(sorted((reverse_row[int(r)],int(col))))
+        for r,col in zip(rr,cc) if int(r) in reverse_row
+        and reverse_row[int(r)]!=int(col)}),dtype=np.int32).reshape(-1,2)
+    # The row-map array is used for evaluation labels or self-exclusion,
+    # never for ranking a deleted word on whether it is actually attested.
     total=Counter()
     for trial in range(trials):
         survivors=rng.choice(n,size=retained,replace=False)
@@ -80,11 +85,23 @@ def reconstruct_page(page,efa,trials=500,topk=50,seed=20261028):
         recoverable=sum(x in removed_forms for x in eligible)
         k=min(topk,possible)
         hits=0
+        chosen=np.empty(0,dtype=np.int32)
         if k:
             tie=rng.random(possible)*.499
             rank=support[eligible].astype(float)+tie
             chosen=eligible[np.argpartition(rank,-k)[-k:]]
             hits=sum(int(x in removed_forms) for x in chosen)
+        if len(full_edges):
+            keep=np.zeros(n,dtype=bool)
+            keep[survivors]=True
+            before=np.mean(keep[full_edges[:,0]] & keep[full_edges[:,1]])
+            restored_rows=set(chosen.tolist())
+            for j in removed:
+                if int(ids[j]) in restored_rows:keep[j]=True
+            after=np.mean(keep[full_edges[:,0]] & keep[full_edges[:,1]])
+            total['edge_recall_before']+=before
+            total['edge_recall_after']+=after
+            total['edge_trials']+=1
         total['eligible']+=possible
         total['removed']+=len(removed)
         total['recoverable']+=recoverable
@@ -102,6 +119,12 @@ def reconstruct_page(page,efa,trials=500,topk=50,seed=20261028):
         'mean_random_expected_hits_topk':ratio('random_expected_hits','trial_n'),
         'deleted_recall':ratio('hits','removed'),
         'deleted_reachable_fraction':ratio('recoverable','removed'),
+        'original_edges':len(full_edges),
+        'edge_recall_survivors_only':ratio('edge_recall_before','edge_trials'),
+        'edge_recall_after_topk':ratio('edge_recall_after','edge_trials'),
+        'edge_recall_gain':round(
+            (total['edge_recall_after']-total['edge_recall_before'])/
+            total['edge_trials'],6) if total['edge_trials'] else None,
         'precision_topk':ratio('hits','selected'),
         'random_precision_topk':ratio('random_expected_hits','selected'),
         'precision_lift_over_random':round(total['hits']/total['random_expected_hits'],5)
@@ -201,6 +224,12 @@ def aggregate_recovery(results):
                 'mean_precision_topk':avg('precision_topk'),
                 'mean_random_precision_topk':avg('random_precision_topk'),
                 'mean_hits_topk':avg('mean_hits_topk'),
+                'edge_recall_survivors_only':round(float(np.nanmean([
+                    r['edge_recall_survivors_only'] if r['edge_recall_survivors_only'] is not None else np.nan
+                    for r in rows])),6),
+                'edge_recall_after_topk':round(float(np.nanmean([
+                    r['edge_recall_after_topk'] if r['edge_recall_after_topk'] is not None else np.nan
+                    for r in rows])),6),
                 'mean_random_expected_hits_topk':avg('mean_random_expected_hits_topk'),
                 'mean_candidate_pool':avg('mean_candidate_pool')}
         out[l]['lift_vs_random_topk']=round(
