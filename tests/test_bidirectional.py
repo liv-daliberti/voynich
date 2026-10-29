@@ -71,3 +71,19 @@ def test_training_only_fusion_tuning():
     assert len(grid)==5
     assert bins(0,5)=="first"
     assert bins(4,5)=="last"
+
+
+def test_synthetic_right_context_predicts_center_word():
+    # A center word is independent of its preceding marker, but exactly
+    # determined by the right-hand marker. Reverse prediction should win.
+    synthetic=(
+        [("x",["start","alpha","endinga"])]*70 +
+        [("x",["start","omega","endingo"])]*70)
+    fm=WordLattice(synthetic,max_vocab=20,smoothing=.5)
+    bm=WordLattice(backwards(synthetic),max_vocab=20,smoothing=.5)
+    f=CachedWalk(fm)
+    b=CachedWalk(bm)
+    word="alpha"
+    forward_prob=f.distribution(["start"],1)[fm.index[word]]
+    backward_prob=b.distribution(["endinga"],1)[bm.index[word]]
+    assert backward_prob > forward_prob
