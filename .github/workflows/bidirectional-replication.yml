@@ -1,0 +1,38 @@
+name: Replicate bidirectional line predictions
+on:
+  workflow_dispatch:
+  push:
+    branches: [bidirectional-position-prediction]
+    paths:
+      - experiments/bidirectional/**
+      - experiments/latent_grammar/word_lattice.py
+      - tests/test_bidirectional.py
+      - .github/workflows/bidirectional-replication.yml
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Download source corpora and fingerprint inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data results/bidirectional
+          curl -fsSL --retry 3 -o data/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          curl -fsSL --retry 3 -o data/1342-0.txt https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342-0.txt
+          curl -fsSL --retry 3 -o data/1228.txt https://raw.githubusercontent.com/GITenberg/On-the-Origin-of-Species-By-Means-of-Natural-Selection--13-Or-the-Preservation-of-Favoured-Rac__1228/master/1228.txt
+          curl -fsSL --retry 3 -o data/timm_generated.txt https://raw.githubusercontent.com/TorstenTimm/SelfCitationTextgenerator/master/executable/generate/generated_text.txt
+          sha256sum data/* > results/bidirectional/source_sha256.txt
+      - name: Run forward backward and two-sided position evaluation
+        run: python experiments/bidirectional/bidirectional.py --zl data/ZL3b-n.txt --austen data/1342-0.txt --darwin data/1228.txt --generated data/timm_generated.txt --max-lines 50 --out results/bidirectional
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bidirectional-position-results
+          path: results/bidirectional
+          retention-days: 30
