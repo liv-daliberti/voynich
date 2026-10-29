@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse, csv, json, math, sys
 from pathlib import Path
 from collections import defaultdict, Counter
+from functools import lru_cache
 import numpy as np
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from experiments.same_target_source.evaluate import get_pages
@@ -53,10 +54,11 @@ def by_quire(pages):
     return g
 
 
+@lru_cache(maxsize=8192)
 def propose(word,alphabet,eva):
     if not alphabet:return set()
-    return (one_edit_forms(glyphs(word),alphabet) if eva else
-            character_edits(word,tuple(alphabet)))-{word}
+    return frozenset((one_edit_forms(glyphs(word),alphabet) if eva else
+            character_edits(word,tuple(alphabet)))-{word})
 
 
 def tally(pages,eva,order=None,record_edges=True):
@@ -86,7 +88,7 @@ def tally(pages,eva,order=None,record_edges=True):
             actual_innovations=set()
             cache={}
             for center in previous:
-                if center not in cache:cache[center]=propose(center,alphabet,eva)
+                if center not in cache:cache[center]=propose(center,tuple(alphabet),eva)
                 family=cache[center]
                 # Distinct candidate word family, not one edge for each token.
                 persistence=family & previous & current
