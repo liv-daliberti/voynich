@@ -217,14 +217,14 @@ def evaluate(pages,trials=400,seed=20261028,limit_centers=180):
              "neighbors":r["active_one_hop"],"two_hop":r["active_two_hop"],
              "triangles":r["ego_triangles"],"local_degree":r["active_one_hop"]}
             for r in present],key=lambda x:x["folio"])
-    return results,word_rows,page_rows,histories
+    return results,word_rows,page_rows,histories,adjacency,centers
 
 
 def run(zl,out,trials=400):
     pages,_=__import__(
         "experiments.same_target_source.evaluate",
         fromlist=["get_pages"]).get_pages(zl,"voynich")
-    result,words,ego_pages,histories=evaluate(pages,trials)
+    result,words,ego_pages,histories,adjacency,centers=evaluate(pages,trials)
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
     for filename,rows in (("word_summary.csv",words),
                           ("word_ego_per_folio.csv",ego_pages)):
@@ -233,6 +233,50 @@ def run(zl,out,trials=400):
             writer.writeheader();writer.writerows(rows)
     (out/"selected_word_histories.json").write_text(
         json.dumps(histories,indent=2)+"\n")
+    # Export editable graph data for EVERY observed type, not merely the
+    # subset that qualified for page-drift hypothesis testing.
+    all_types=sorted(adjacency)
+    with (out/"all_word_egos.jsonl").open("w") as fp:
+        for word in all_types:
+            active=adjacency[word]
+            all_nodes=active|{word}
+            triangles=sorted(
+                [list(sorted((u,v))) for u in active
+                 for v in adjacency[u]&active if u<v])
+            fp.write(json.dumps({
+                "center":word,"nodes":sorted(all_nodes),
+                "edges":[[word,u] for u in sorted(active)]+triangles,
+                "ring_two_nodes":sorted(two_hops(word,adjacency))
+            })+"\n")
+    page_words=[set(p["words"]) for p in pages]
+    with (out/"all_word_folio_egos.jsonl").open("w") as fp:
+        for word in all_types:
+            for page_idx,_ in centers[word]:
+                on_page=adjacency[word]&page_words[page_idx]
+                links=sorted([list(sorted((u,v))) for u in on_page
+                              for v in adjacency[u]&on_page if u<v])
+                fp.write(json.dumps({
+                    "center":word,"folio":pages[page_idx]["folio"],
+                    "language":pages[page_idx]["language"],
+                    "quire":pages[page_idx].get("quire_code","?"),
+                    "nodes":[word]+sorted(on_page),
+                    "edges":[[word,u] for u in sorted(on_page)]+links,
+                    "two_hop_present":sorted(two_hops(word,adjacency)
+                                             &page_words[page_idx])
+                })+"\n")
+    # DOT is useful for directly inspecting individual word edit networks.
+    (out/"selected_graphviz").mkdir(exist_ok=True)
+    for center in sorted(histories,key=lambda w:(-len(centers[w]),w))[:25]:
+        onering=adjacency[center]
+        edgelist=[(center,u) for u in sorted(onering)]
+        edgelist.extend((u,v) for u in sorted(onering)
+                        for v in adjacency[u]&onering if u<v)
+        lines=["graph G {","  graph [overlap=false];",
+               "  node [shape=circle];",f'  "{center}" [shape=doublecircle];']
+        lines.extend(f'  "{u}" -- "{v}";' for u,v in edgelist)
+        lines.append("}")
+        (out/"selected_graphviz"/f"{center}.dot").write_text(
+            "\n".join(lines)+"\n")
     (out/"summary.json").write_text(json.dumps(result,indent=2)+"\n")
     print(json.dumps(result,indent=2),flush=True)
     return result
