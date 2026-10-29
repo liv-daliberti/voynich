@@ -105,7 +105,7 @@ def score_identical_gold(near,far,target):
         expected=(model["topk"]*len(supported)/model["n_candidates"]
                   if model["n_candidates"] else 0.)
         # Raw rank is not comparable across different candidate-set sizes.
-        return {"hits":hits,"coverage":len(supported)/len(gold),
+        return {"hits":hits,"topk":model["topk"],"coverage":len(supported)/len(gold),
                 "precision":hits/max(model["topk"],1),
                 "recall":hits/len(gold),
                 "chance_adjusted_recall":(hits-expected)/len(gold),
