@@ -162,12 +162,14 @@ def distribution(observed,draws):
         "n_valid_permutations":len(samples)}
 
 
-def evaluate(pages,eva,permutations=150,seed=20261028):
-    models=[precompute_source(p,eva) for p in pages]
+def evaluate(pages,eva,permutations=150,seed=20261028,
+             null_labels=None,graph_only=False):
+    models=([{"types":len(set(p["words"]))} for p in pages]
+            if graph_only else [precompute_source(p,eva) for p in pages])
     graph=graph_matrices(pages)
     original=np.arange(len(pages),dtype=int)
     ref_graph=graph_stats_in_order(pages,original,graph)
-    ref_source=same_target_stat(pages,models,original)
+    ref_source={} if graph_only else same_target_stat(pages,models,original)
     results={
         "metadata_interpretation":{
             "$L":"Currier A/B","$I":"illustration/section",
@@ -178,6 +180,7 @@ def evaluate(pages,eva,permutations=150,seed=20261028):
         "nulls":{}}
     rng=np.random.default_rng(seed)
     for label,fields in STRATA.items():
+        if null_labels is not None and label not in null_labels:continue
         groups=cells(pages,models,fields)
         graph_draws=defaultdict(list)
         source_draws=defaultdict(list)
@@ -190,13 +193,14 @@ def evaluate(pages,eva,permutations=150,seed=20261028):
             for lang,by_field in gs.items():
                 for field,x in by_field.items():
                     graph_draws[lang,field].append(x["delta"])
-            ss=same_target_stat(pages,models,order)
-            for scheme,by_lang in ss.items():
-                for lang,x in by_lang.items():
-                    eligible[scheme,lang].append(x["target_count"])
-                    for m in ("delta_chance_adjusted_recall",
-                              "delta_recall","delta_coverage"):
-                        source_draws[scheme,lang,m].append(x[m])
+            if not graph_only:
+                ss=same_target_stat(pages,models,order)
+                for scheme,by_lang in ss.items():
+                    for lang,x in by_lang.items():
+                        eligible[scheme,lang].append(x["target_count"])
+                        for m in ("delta_chance_adjusted_recall",
+                                  "delta_recall","delta_coverage"):
+                            source_draws[scheme,lang,m].append(x[m])
         result={"strata_keys":fields,
                 "permutation_mobility":movable_summary(groups,len(pages)),
                 "mean_changed_pages_per_permutation":round(
@@ -235,9 +239,12 @@ def main():
     p.add_argument("--zl",required=True)
     p.add_argument("--out",required=True)
     p.add_argument("--permutations",type=int,default=150)
+    p.add_argument("--nulls",nargs="*",choices=tuple(STRATA))
+    p.add_argument("--graph-only",action="store_true")
     a=p.parse_args()
     pages,eva=get_pages(a.zl,"voynich")
-    result=evaluate(pages,eva,a.permutations)
+    result=evaluate(pages,eva,a.permutations,
+                    null_labels=a.nulls,graph_only=a.graph_only)
     target=Path(a.out);target.parent.mkdir(parents=True,exist_ok=True)
     target.write_text(json.dumps(result,indent=2)+"\n")
 
