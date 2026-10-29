@@ -2,7 +2,7 @@
 import numpy as np
 from experiments.cross_page.reconstruct import (
     source_model,score_pair,score_matrices,ordered_diagnostics,
-    match_distant_sources,generated_words,run_pages,
+    match_distant_sources,generated_words,native_generated_pages,run_pages,
 )
 
 
@@ -58,3 +58,14 @@ def test_generated_parser_skips_stats():
     txt="#Properties\n#method.random.pseudo.seed=19\n#Statistics\n"
     txt+="\npchal shal chor\nchey daiin qokedy\n"
     assert generated_words(txt)==["pchal","shal","chor","chey","daiin","qokedy"]
+
+
+def test_native_timm_page_partition_is_not_repaginated():
+    sample="#Properties\n#Statistics\n" + "\n".join([
+        "pchal shal chor","chey daiin qokedy","chol shol dal",
+        "sheey qokeey o","qokaiin shaiin shedy"])
+    pages=native_generated_pages(sample,lines_per_page=2)
+    assert len(pages)==3
+    assert [len(p["words"]) for p in pages]==[6,6,3]
+    assert all(p["language"]=="G" for p in pages)
+    assert pages[0]["folio"]=="native_0000"
