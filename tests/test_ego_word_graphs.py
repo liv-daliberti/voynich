@@ -52,7 +52,7 @@ def test_quira_strict_permutation_preserves_complete_page_graph():
         if i<8: words=["cat","bat","mat","hat","rat","sat"]
         else: words=["dog","fog","hog","log","bog","cog"]
         pages.append(page(i,words,quire="A" if i<8 else "B"))
-    x,words,rows,histories=evaluate(pages,trials=5,limit_centers=8)
+    x,words,rows,histories,adjacency,centers=evaluate(pages,trials=5,limit_centers=8)
     assert x["n_pages"]==16
     assert x["n_selected_center_words"]>=1
     assert len(histories)<=8
