@@ -1,0 +1,79 @@
+name: Masked VQ handwriting-line generation with quire-heldout image tests
+on:
+  workflow_dispatch:
+  push:
+    branches: [line-masked-visual-generative]
+    paths:
+      - experiments/visual_gen/line_dataset.py
+      - experiments/visual_gen/train_line_vq.py
+      - experiments/visual_gen/htr_alignment_gate.py
+      - .github/workflows/voynich-masked-line-gen.yml
+      - tests/test_visual_line_masked.py
+jobs:
+  train-and-evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 29
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install CPU model and image libraries
+        run: |
+          pip install 'numpy>=1.24,<3' 'scikit-learn>=1.5,<2' opencv-python-headless pillow pytest
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+      - name: Fetch manuscript source text and source folio images
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data/visual_line results/visual_line
+          curl -fsSL --retry 3 -o data/visual_line/ZL3b-n.txt https://raw.githubusercontent.com/matthewdgreen/cipher_benchmark/main/benchmark/unsolved/sources/voynich/transcriptions/ZL3b-n.txt
+          URL=https://raw.githubusercontent.com/d2kx/voynich-research/main/pages
+          for file in f1r_full.png f1v_full.png f16v_full_enh.png f17r_full.png f34r_full_enh.png f49v_full.png f57v_full_enh.png f58r_full.png f76r_full.png f78r_full.png f88r_full_enh.png; do
+            curl -fsSL --retry 3 -o data/visual_line/${file} "${URL}/${file}"
+          done
+          sha256sum data/visual_line/* > results/visual_line/source_sha256.txt
+      - name: Extract potential handwritten lines and hold out entire quires
+        run: |
+          python experiments/visual_gen/line_dataset.py \
+            --zl data/visual_line/ZL3b-n.txt \
+            --images \
+            data/visual_line/f1r_full.png \
+            data/visual_line/f1v_full.png \
+            data/visual_line/f16v_full_enh.png \
+            data/visual_line/f17r_full.png \
+            data/visual_line/f34r_full_enh.png \
+            data/visual_line/f49v_full.png \
+            data/visual_line/f57v_full_enh.png \
+            data/visual_line/f58r_full.png \
+            data/visual_line/f76r_full.png \
+            data/visual_line/f78r_full.png \
+            data/visual_line/f88r_full_enh.png \
+            --heldout-quires M O --out results/visual_line
+      - name: Audit genuine line-to-EVA alignment eligibility
+        run: |
+          python experiments/visual_gen/htr_alignment_gate.py \
+            --line-manifest results/visual_line/line_manifest.json \
+            --zl data/visual_line/ZL3b-n.txt \
+            --out results/visual_line/htr_alignment_gate.json
+      - name: Run learned pixel autoencoder, contrastive loss and masked-code Transformer
+        run: |
+          python experiments/visual_gen/train_line_vq.py \
+            --dataset results/visual_line/line_images.npz \
+            --out results/visual_line --vq-steps 280 \
+            --mask-steps 160 --codes 96 --nlines 17
+      - name: Evaluate visual pseudo-symbol/word-gap distributions without claiming EVA OCR
+        run: |
+          python experiments/visual_gen/visual_symbol_audit.py \
+            --dataset results/visual_line/line_images.npz \
+            --generated results/visual_line/generated_line_montage.png \
+            --iid results/visual_line/iid_line_montage.png \
+            --out results/visual_line/visual_symbol_audit.json
+      - name: Smoke tests with complete image dependencies
+        run: python -m pytest -q tests/test_visual_line_masked.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: voynich-quire-heldout-masked-line-generator
+          path: results/visual_line
+          retention-days: 30
+          if-no-files-found: warn
