@@ -43,7 +43,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --depth 1 https://github.com/TorstenTimm/SelfCitationTextgenerator.git data/timm_upstream
+          git clone https://github.com/TorstenTimm/SelfCitationTextgenerator.git data/timm_upstream
+          git -C data/timm_upstream checkout --detach a6ede2202dd7ad6285ce2c007bf22c2a0e7709b7
           cd data/timm_upstream/executable
           SEED="${{ matrix.cohort }}"
           SEED="${SEED#timm}"
